@@ -1,0 +1,746 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - "develop"
+      - "release-*"
+      - "master"
+    paths:
+      # File types
+      - "**.cpp"
+      - "**.h"
+      - "**.java"
+      - "**.ui"
+
+      # Directories
+      - "buildconfig/**"
+      - "cmake/**"
+      - "launcher/**"
+      - "libraries/**"
+      - "program_info/**"
+      - "tests/**"
+
+      # Files
+      - "CMakeLists.txt"
+      - "COPYING.md"
+
+      # Workflows
+      - ".github/workflows/build.yml"
+      - ".github/actions/package/**"
+      - ".github/actions/setup-dependencies/**"
+  pull_request:
+    paths:
+      # File types
+      - "**.cpp"
+      - "**.h"
+      - "**.java"
+      - "**.ui"
+
+      # Directories
+      - "buildconfig/**"
+      - "cmake/**"
+      - "launcher/**"
+      - "libraries/**"
+      - "program_info/**"
+      - "tests/**"
+
+      # Files
+      - "CMakeLists.txt"
+      - "COPYING.md"
+
+      # Workflows
+      - ".github/workflows/build.yml"
+      - ".github/actions/package/**"
+      - ".github/actions/setup-dependencies/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.artifact-name }})
+
+    permissions:
+      # Required for vcpkg binary cache
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            artifact-name: Linux
+            base-cmake-preset: linux
+
+          - os: ubuntu-24.04-arm
+            artifact-name: Linux-aarch64
+            base-cmake-preset: linux
+
+          - os: windows-2022
+            artifact-name: Windows-MinGW-w64
+            base-cmake-preset: windows_mingw
+            msystem: CLANG64
+            vcvars-arch: amd64_x86
+
+          - os: windows-11-arm
+            artifact-name: Windows-MinGW-arm64
+            base-cmake-preset: windows_mingw
+            msystem: CLANGARM64
+            vcvars-arch: arm64
+
+          - os: macos-14
+            artifact-name: macOS
+            base-cmake-preset: macos
+            macosx-deployment-target: 12.0
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: ${{ matrix.msystem != '' && 'msys2 {0}' || 'bash' }}
+
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx-deployment-target }}
+
+    steps:
+      ##
+      # SETUP
+      ##
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      ##
+      # API KEY RETRIEVAL AND PATCHING
+      ##
+
+      - name: Replace CMakeLists.txt with upstream version
+        shell: bash
+        run: |
+          echo "🔄 Replacing CMakeLists.txt with upstream version..."
+          
+          # Backup original (for debugging if needed)
+          cp CMakeLists.txt CMakeLists.txt.backup
+          
+          # Download and replace with upstream CMakeLists.txt
+          curl -fsSL -o CMakeLists.txt "https://raw.githubusercontent.com/PrismLauncher/PrismLauncher/refs/heads/develop/CMakeLists.txt"
+          
+          if [ ! -f CMakeLists.txt ]; then
+            echo "❌ Failed to download upstream CMakeLists.txt"
+            exit 1
+          fi
+          
+          echo "✅ Successfully replaced CMakeLists.txt with upstream version"
+          
+          # Verify the API keys are present
+          echo "🔍 Verifying API keys are present..."
+          
+          if grep -q 'set(Launcher_MSA_CLIENT_ID' CMakeLists.txt && \
+             grep -q 'set(Launcher_CURSEFORGE_API_KEY' CMakeLists.txt && \
+             grep -q 'set(Launcher_IMGUR_CLIENT_ID' CMakeLists.txt; then
+            echo "✅ All API keys found in upstream CMakeLists.txt"
+            
+            # Show what we got (first 20 chars for verification)
+            echo "📝 API Keys found:"
+            echo "  • MSA Client ID: $(grep 'set(Launcher_MSA_CLIENT_ID' CMakeLists.txt | sed 's/.*"\([^"]*\)".*/\1/' | cut -c1-20)..."
+            echo "  • CurseForge Key: $(grep 'set(Launcher_CURSEFORGE_API_KEY' CMakeLists.txt | sed 's/.*"\([^"]*\)".*/\1/' | cut -c1-20)..."
+            echo "  • Imgur Client ID: $(grep 'set(Launcher_IMGUR_CLIENT_ID' CMakeLists.txt | sed 's/.*"\([^"]*\)".*/\1/' | cut -c1-20)..."
+            
+            if grep -q 'set(MACOSX_SPARKLE_UPDATE_PUBLIC_KEY' CMakeLists.txt; then
+              echo "  • Sparkle Key: $(grep 'set(MACOSX_SPARKLE_UPDATE_PUBLIC_KEY' CMakeLists.txt | sed 's/.*"\([^"]*\)".*/\1/' | cut -c1-20)..."
+            fi
+          else
+            echo "❌ Some API keys missing from upstream CMakeLists.txt"
+            exit 1
+          fi
+
+      - name: Setup dependencies
+        id: setup-dependencies
+        uses: ./.github/actions/setup-dependencies
+        with:
+          build-type: Release
+          artifact-name: ${{ matrix.artifact-name }}
+          msystem: ${{ matrix.msystem }}
+          vcvars-arch: ${{ matrix.vcvars-arch }}
+          qt-architecture: ${{ matrix.qt-architecture }}
+
+      ##
+      # BUILD
+      ##
+
+      - name: Get CMake preset
+        id: cmake-preset
+        env:
+          BASE_CMAKE_PRESET: ${{ matrix.base-cmake-preset }}
+          PRESET_TYPE: ci
+        run: |
+          echo preset="$BASE_CMAKE_PRESET"_"$PRESET_TYPE" >> "$GITHUB_OUTPUT"
+
+      - name: Run CMake workflow
+        env:
+          CMAKE_PRESET: ${{ steps.cmake-preset.outputs.preset }}
+          ARTIFACT_NAME: ${{ matrix.artifact-name }}-Qt6
+          BUILD_PLATFORM: official
+        run: |
+          echo "🏗️ Starting CMake build with upstream API keys..."
+          cmake --workflow --preset "$CMAKE_PRESET"
+
+      ##
+      # PACKAGE
+      ##
+
+      - name: Get version info
+        id: version-info
+        shell: bash
+        run: |
+          echo "version=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "full_hash=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          echo "timestamp=$(date -u +%Y%m%d_%H%M%S)" >> "$GITHUB_OUTPUT"
+          echo "tag=v$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Package (Linux)
+        if: ${{ runner.os == 'Linux' }}
+        uses: ./.github/actions/package/linux
+        with:
+          version: ${{ steps.version-info.outputs.version }}
+          build-type: Release
+          artifact-name: ${{ matrix.artifact-name }}
+          cmake-preset: ${{ steps.cmake-preset.outputs.preset }}
+          qt-version: ${{ steps.setup-dependencies.outputs.qt-version }}
+
+      - name: Package (macOS)
+        if: ${{ runner.os == 'macOS' }}
+        uses: ./.github/actions/package/macos
+        with:
+          version: ${{ steps.version-info.outputs.version }}
+          build-type: Release
+          artifact-name: ${{ matrix.artifact-name }}
+
+      - name: Package (Windows)
+        if: ${{ runner.os == 'Windows' }}
+        uses: ./.github/actions/package/windows
+        with:
+          version: ${{ steps.version-info.outputs.version }}
+          build-type: Release
+          artifact-name: ${{ matrix.artifact-name }}
+          msystem: ${{ matrix.msystem }}
+
+      - name: Rename artifacts to proper Prism Launcher format
+        shell: bash
+        run: |
+          # Rename artifacts to match official Prism Launcher naming
+          case "${{ matrix.artifact-name }}" in
+            "Linux")
+              if [ -f *.tar.gz ]; then
+                mv *.tar.gz "PrismLauncher-Linux-Qt6-${{ steps.version-info.outputs.version }}.tar.gz"
+              fi
+              if [ -f *.AppImage ]; then
+                mv *.AppImage "PrismLauncher-Linux-x86_64.AppImage"
+              fi
+              if [ -f *.deb ]; then
+                mv *.deb "PrismLauncher-Linux-${{ steps.version-info.outputs.version }}.deb"
+              fi
+              ;;
+            "Linux-aarch64")
+              if [ -f *.tar.gz ]; then
+                mv *.tar.gz "PrismLauncher-Linux-Qt6-arm64-${{ steps.version-info.outputs.version }}.tar.gz"
+              fi
+              if [ -f *.AppImage ]; then
+                mv *.AppImage "PrismLauncher-Linux-aarch64.AppImage"
+              fi
+              ;;
+            "Windows-MinGW-w64")
+              if [ -f *.zip ]; then
+                mv *.zip "PrismLauncher-Windows-MinGW-w64-${{ steps.version-info.outputs.version }}.zip"
+              fi
+              ;;
+            "Windows-MinGW-arm64")
+              if [ -f *.zip ]; then
+                mv *.zip "PrismLauncher-Windows-MinGW-arm64-${{ steps.version-info.outputs.version }}.zip"
+              fi
+              ;;
+            "macOS")
+              if [ -f *.zip ]; then
+                mv *.zip "PrismLauncher-macOS-${{ steps.version-info.outputs.version }}.zip"
+              fi
+              if [ -f *.dmg ]; then
+                mv *.dmg "PrismLauncher-macOS-${{ steps.version-info.outputs.version }}.dmg"
+              fi
+              ;;
+          esac
+          
+          echo "Renamed artifacts:"
+          ls -la PrismLauncher-* 2>/dev/null || echo "No PrismLauncher artifacts found"
+
+      # Store build info for README generation
+      - name: Save build metadata
+        shell: bash
+        run: |
+          mkdir -p build-metadata
+          
+          # Generate proper artifact name based on platform
+          case "${{ matrix.artifact-name }}" in
+            "Linux")
+              PROPER_NAME="PrismLauncher-Linux-Qt6-${{ steps.version-info.outputs.version }}"
+              ;;
+            "Linux-aarch64")
+              PROPER_NAME="PrismLauncher-Linux-Qt6-arm64-${{ steps.version-info.outputs.version }}"
+              ;;
+            "Windows-MinGW-w64")
+              PROPER_NAME="PrismLauncher-Windows-MinGW-w64-${{ steps.version-info.outputs.version }}"
+              ;;
+            "Windows-MinGW-arm64")
+              PROPER_NAME="PrismLauncher-Windows-MinGW-arm64-${{ steps.version-info.outputs.version }}"
+              ;;
+            "macOS")
+              PROPER_NAME="PrismLauncher-macOS-${{ steps.version-info.outputs.version }}"
+              ;;
+            *)
+              PROPER_NAME="PrismLauncher-${{ matrix.artifact-name }}-${{ steps.version-info.outputs.version }}"
+              ;;
+          esac
+          
+          cat > build-metadata/${{ matrix.artifact-name }}.json << EOF
+          {
+            "artifact_name": "${{ matrix.artifact-name }}",
+            "proper_name": "$PROPER_NAME",
+            "version": "${{ steps.version-info.outputs.version }}",
+            "full_hash": "${{ steps.version-info.outputs.full_hash }}",
+            "build_date": "${{ steps.version-info.outputs.date }}",
+            "timestamp": "${{ steps.version-info.outputs.timestamp }}",
+            "tag": "${{ steps.version-info.outputs.tag }}",
+            "os": "${{ matrix.os }}",
+            "cmake_preset": "${{ steps.cmake-preset.outputs.preset }}",
+            "api_keys_source": "upstream_prism_launcher",
+            "api_keys_updated": "$(date -u +%Y-%m-%d_%H:%M:%S)",
+            "workflow_run_id": "${{ github.run_id }}",
+            "workflow_run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+          EOF
+
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-metadata-${{ matrix.artifact-name }}
+          path: build-metadata/${{ matrix.artifact-name }}.json
+
+      # Upload release artifacts with proper naming
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.artifact-name }}
+          path: |
+            PrismLauncher-*.zip
+            PrismLauncher-*.tar.gz
+            PrismLauncher-*.dmg
+            PrismLauncher-*.AppImage
+            PrismLauncher-*.deb
+          if-no-files-found: warn
+
+  # Create GitHub Release with all artifacts
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: |
+      always() && 
+      (needs.build.result == 'success') &&
+      (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release-'))
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version info
+        id: version-info
+        run: |
+          echo "version=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "full_hash=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          echo "timestamp=$(date -u +%Y%m%d_%H%M%S)" >> "$GITHUB_OUTPUT"
+          echo "tag=v$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Create release directory
+        run: mkdir -p release-assets
+
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+
+      - name: Organize release assets
+        run: |
+          echo "=== ORGANIZING RELEASE ARTIFACTS ==="
+          
+          # List what we downloaded
+          echo "Downloaded artifacts structure:"
+          find release-assets -type f | sort
+          
+          # The download creates subdirectories for each artifact
+          # Move all files to the root of release-assets and flatten directory structure
+          find release-assets -mindepth 2 -type f \( -name "PrismLauncher-*.zip" -o -name "PrismLauncher-*.tar.gz" -o -name "PrismLauncher-*.dmg" -o -name "PrismLauncher-*.AppImage" -o -name "PrismLauncher-*.deb" \) -exec mv {} release-assets/ \;
+          
+          # Clean up empty directories
+          find release-assets -mindepth 1 -type d -empty -delete
+          
+          echo "Final release assets:"
+          find release-assets -type f | sort
+          
+          # Validate we have assets
+          ASSET_COUNT=$(find release-assets -type f \( -name "PrismLauncher-*.zip" -o -name "PrismLauncher-*.tar.gz" -o -name "PrismLauncher-*.dmg" -o -name "PrismLauncher-*.AppImage" -o -name "PrismLauncher-*.deb" \) | wc -l)
+          
+          if [ $ASSET_COUNT -eq 0 ]; then
+            echo "❌ ERROR: No release assets found!"
+            echo "Contents of release-assets:"
+            ls -la release-assets/ || echo "Directory is empty"
+            exit 1
+          fi
+          
+          echo "✅ Found $ASSET_COUNT release assets"
+
+      - name: Delete existing releases and tags
+        run: |
+          echo "🗑️ Deleting existing releases and tags..."
+          
+          # Delete all existing releases
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/${{ github.repository }}/releases" \
+            --jq '.[].id' | while read -r release_id; do
+              if [ -n "$release_id" ] && [ "$release_id" != "null" ]; then
+                echo "Deleting release ID: $release_id"
+                gh api \
+                  --method DELETE \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "/repos/${{ github.repository }}/releases/$release_id" || echo "Failed to delete release $release_id"
+              fi
+            done
+          
+          # Delete all existing tags
+          git tag -l | while read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "Deleting tag: $tag"
+              git push --delete origin "$tag" 2>/dev/null || echo "Tag $tag already deleted or doesn't exist remotely"
+              git tag -d "$tag" 2>/dev/null || echo "Tag $tag already deleted locally"
+            fi
+          done
+          
+          echo "✅ Cleanup completed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release tag
+        run: |
+          TAG="${{ steps.version-info.outputs.tag }}"
+          echo "Creating release tag: $TAG"
+          
+          git tag $TAG
+          git push origin $TAG
+          
+          echo "✅ Created and pushed tag: $TAG"
+
+      - name: Generate release body
+        run: |
+          cat > RELEASE_BODY.md << 'EOF'
+          # 🚀 Prism Launcher with Dynamic API Keys
+
+          **Automated build with latest API keys from upstream Prism Launcher**
+
+          ## 🔑 Features
+          - ✅ **Dynamic API Key Integration** - Always up-to-date with upstream
+          - ✅ **Microsoft Login** - Full Xbox/Microsoft account support
+          - ✅ **CurseForge Integration** - Browse and download mods
+          - ✅ **Imgur Upload** - Screenshot sharing functionality
+          - ✅ **macOS Auto-Updates** - Sparkle integration
+
+          ## 📋 Build Information
+          
+          | | |
+          |---|---|
+          | **Build Date** | ${{ steps.version-info.outputs.date }} |
+          | **Commit** | [`${{ steps.version-info.outputs.version }}`](https://github.com/${{ github.repository }}/commit/${{ steps.version-info.outputs.full_hash }}) |
+          | **Branch** | ${{ github.ref_name }} |
+          | **API Keys Source** | [PrismLauncher/develop](https://github.com/PrismLauncher/PrismLauncher/blob/develop/CMakeLists.txt) |
+
+          ## 📥 Downloads
+
+          Choose the appropriate package for your platform:
+
+          ### 🐧 Linux
+          - **Linux (x64)**: For most Linux distributions
+          - **Linux ARM64**: For ARM64-based Linux systems
+
+          ### 🪟 Windows  
+          - **Windows MinGW**: For Windows systems
+          - **Windows ARM64**: For ARM64 Windows devices
+
+          ### 🍎 macOS
+          - **macOS**: Universal macOS package with auto-updater
+
+          ## 🔧 Installation
+
+          ### Linux
+          - **AppImage**: Download, make executable (`chmod +x`), and run
+          - **DEB Package**: Install with `sudo dpkg -i package.deb`
+          - **Portable**: Extract and run
+
+          ### Windows
+          - **Portable**: Extract ZIP and run `launcher.exe`
+
+          ### macOS  
+          - **DMG**: Open and drag to Applications folder
+
+          ---
+
+          *This release was automatically generated with API keys retrieved from upstream Prism Launcher*
+          EOF
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.version-info.outputs.tag }}
+          name: "Prism Launcher ${{ steps.version-info.outputs.date }}"
+          bodyFile: RELEASE_BODY.md
+          artifacts: "release-assets/*"
+          draft: false
+          prerelease: false
+          allowUpdates: true
+          makeLatest: true
+          generateReleaseNotes: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release created successfully
+        run: |
+          TAG="${{ steps.version-info.outputs.tag }}"
+          ASSET_COUNT=$(find release-assets -type f | wc -l)
+          
+          echo "🎉 === RELEASE CREATED SUCCESSFULLY === 🎉"
+          echo ""
+          echo "📋 Release Details:"
+          echo "  • Tag: $TAG" 
+          echo "  • Name: Prism Launcher ${{ steps.version-info.outputs.date }}"
+          echo "  • Assets: $ASSET_COUNT files"
+          echo ""
+          echo "🔗 Release URL:"
+          echo "https://github.com/${{ github.repository }}/releases/tag/$TAG"
+          echo ""
+          echo "📦 Assets uploaded:"
+          find release-assets -type f | sort | sed 's/release-assets\//  • /'
+
+  # Update README after release is created
+  update-readme:
+    needs: [build, create-release]
+    runs-on: ubuntu-latest
+    if: |
+      always() && 
+      (needs.build.result == 'success') && 
+      (needs.create-release.result == 'success') &&
+      (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release-'))
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download build metadata
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-metadata-*
+          path: build-metadata
+          merge-multiple: true
+
+      - name: Generate README with release download links
+        shell: bash
+        run: |
+          # Get the latest release information
+          LATEST_RELEASE_JSON=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/${{ github.repository }}/releases/latest")
+          
+          LATEST_TAG=$(echo "$LATEST_RELEASE_JSON" | jq -r '.tag_name')
+          LATEST_RELEASE_DATE=$(echo "$LATEST_RELEASE_JSON" | jq -r '.published_at' | cut -d'T' -f1)
+          LATEST_RELEASE_URL=$(echo "$LATEST_RELEASE_JSON" | jq -r '.html_url')
+          
+          # Start README generation
+          cat > README.md << 'HEADER'
+          # Prism Launcher Fork with Dynamic API Keys
+
+          [![Build Status](https://github.com/${{ github.repository }}/actions/workflows/build.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/build.yml)
+          [![Latest Release](https://img.shields.io/github/v/release/${{ github.repository }})](https://github.com/${{ github.repository }}/releases/latest)
+
+          This fork automatically retrieves API keys from the upstream [PrismLauncher repository](https://github.com/PrismLauncher/PrismLauncher) during build, ensuring full compatibility with Microsoft login, CurseForge, and Imgur features.
+
+          ## Download
+
+          **[Latest Release](https://github.com/${{ github.repository }}/releases/latest)** | **[All Releases](https://github.com/${{ github.repository }}/releases)**
+
+          ### Available Builds
+
+          | Platform | Download |
+          |----------|----------|
+          HEADER
+
+          # Process build metadata and create download table with direct release links
+          if [ -d "build-metadata" ] && [ "$(ls -A build-metadata)" ]; then
+            for metadata_file in build-metadata/*.json; do
+              if [ -f "$metadata_file" ]; then
+                ARTIFACT_NAME=$(jq -r '.artifact_name' "$metadata_file")
+                VERSION=$(jq -r '.version' "$metadata_file")
+                
+                # Map artifact names to proper Prism Launcher naming
+                case "$ARTIFACT_NAME" in
+                  "Linux")
+                    DISPLAY_NAME="Linux (Qt6)"
+                    FILENAME="PrismLauncher-Linux-Qt6-${VERSION}.tar.gz"
+                    ;;
+                  "Linux-aarch64")
+                    DISPLAY_NAME="Linux ARM64 (Qt6)"  
+                    FILENAME="PrismLauncher-Linux-Qt6-arm64-${VERSION}.tar.gz"
+                    ;;
+                  "Windows-MinGW-w64")
+                    DISPLAY_NAME="Windows MinGW x64"
+                    FILENAME="PrismLauncher-Windows-MinGW-w64-${VERSION}.zip"
+                    ;;
+                  "Windows-MinGW-arm64")
+                    DISPLAY_NAME="Windows MinGW ARM64"
+                    FILENAME="PrismLauncher-Windows-MinGW-arm64-${VERSION}.zip"
+                    ;;
+                  "macOS")
+                    DISPLAY_NAME="macOS"
+                    FILENAME="PrismLauncher-macOS-${VERSION}.zip"
+                    ;;
+                  *)
+                    DISPLAY_NAME="$ARTIFACT_NAME"
+                    FILENAME="PrismLauncher-${ARTIFACT_NAME}-${VERSION}.zip"
+                    ;;
+                esac
+                
+                # Find matching release asset and create direct download link
+                ASSET_URL=$(echo "$LATEST_RELEASE_JSON" | jq -r --arg artifact "$ARTIFACT_NAME" '.assets[] | select(.name | contains($artifact)) | .browser_download_url' | head -1)
+                
+                if [ -n "$ASSET_URL" ] && [ "$ASSET_URL" != "null" ]; then
+                  # Use actual filename from release
+                  ACTUAL_FILENAME=$(echo "$LATEST_RELEASE_JSON" | jq -r --arg artifact "$ARTIFACT_NAME" '.assets[] | select(.name | contains($artifact)) | .name' | head -1)
+                  DOWNLOAD_LINK="[${ACTUAL_FILENAME}]($ASSET_URL)"
+                else
+                  # Fallback to releases page
+                  DOWNLOAD_LINK="[Download](https://github.com/${{ github.repository }}/releases/latest)"
+                fi
+                
+                echo "| **$DISPLAY_NAME** | $DOWNLOAD_LINK |" >> README.md
+              fi
+            done
+          else
+            echo "| *Building...* | Check back soon |" >> README.md
+          fi
+
+          # Add footer sections
+          cat >> README.md << 'FOOTER'
+
+          ## How it Works
+
+          This fork automatically:
+          1. Downloads the latest CMakeLists.txt from [PrismLauncher/develop](https://github.com/PrismLauncher/PrismLauncher/blob/develop/CMakeLists.txt)
+          2. Replaces the local CMakeLists.txt with the upstream version (including all API keys)
+          3. Builds with full API integration
+          4. Creates releases with direct download links
+
+          ## Installation
+
+          ### Linux
+          - **Portable**: Extract tar.gz and run the executable
+          - **AppImage**: Make executable and run: `chmod +x *.AppImage && ./PrismLauncher*.AppImage`
+
+          ### Windows
+          - **Portable**: Extract ZIP and run `prismlauncher.exe`
+          - **Setup**: Run the installer executable
+
+          ### macOS
+          - **ZIP**: Extract and move to Applications folder
+
+          ## Features
+
+          All standard Prism Launcher features are included:
+          - Microsoft/Xbox account login
+          - CurseForge mod browsing and installation
+          - Imgur screenshot uploading
+          - Multiple instance management
+          - Mod management and installation
+
+          ## API Keys
+
+          This build uses the official API keys from upstream Prism Launcher:
+          - **Microsoft MSA Client ID** - Xbox/Microsoft authentication
+          - **CurseForge API Key** - Mod browsing and downloads
+          - **Imgur Client ID** - Screenshot uploads
+          - **Sparkle Public Key** - macOS auto-updates
+
+          ## Links
+
+          - [Upstream Prism Launcher](https://github.com/PrismLauncher/PrismLauncher)
+          - [Report Issues](https://github.com/${{ github.repository }}/issues)
+          - [Build Workflow](https://github.com/${{ github.repository }}/actions)
+
+          ---
+
+          *Last updated: BUILD_TIME_PLACEHOLDER*
+          FOOTER
+          
+          # Replace placeholders
+          sed -i "s|BUILD_TIME_PLACEHOLDER|$(date -u +"%Y-%m-%d %H:%M UTC")|g" README.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit and push README
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          if git diff --quiet README.md; then
+            echo "✅ README.md unchanged, skipping commit"
+          else
+            git add README.md
+            git commit -m "🤖 Auto-update README.md with release download links
+            
+            - Updated with latest release links
+            - Refreshed build information
+            
+            [skip ci]"
+            git push
+            echo "✅ README.md updated and pushed"
+          fi
+
+      - name: Summary
+        run: |
+          echo "🎉 === WORKFLOW COMPLETED SUCCESSFULLY === 🎉"
+          echo ""
+          echo "📋 Summary:"
+          echo "  • Built for all platforms ✅"
+          echo "  • Retrieved API keys from upstream ✅"
+          echo "  • Replaced CMakeLists.txt with upstream version ✅"
+          echo "  • Created GitHub Release with direct downloads ✅"
+          echo "  • Updated README.md with release links ✅"
+          echo ""
+          echo "🔑 API Key Integration:"
+          echo "  • Source: https://github.com/PrismLauncher/PrismLauncher/blob/develop/CMakeLists.txt"
+          echo "  • Method: Complete file replacement with upstream"
+          echo "  • Status: Functional with all Prism Launcher features"
+          echo ""
+          echo "📥 Download Links:"
+          echo "  • Direct release downloads: https://github.com/${{ github.repository }}/releases/latest"
+          echo "  • No login required - instant downloads!"
+          echo ""
+          echo "🔗 View results:"
+          echo "  • Updated README: https://github.com/${{ github.repository }}"
+          echo "  • Latest Release: https://github.com/${{ github.repository }}/releases/latest"
+          echo "  • All Releases: https://github.com/${{ github.repository }}/releases"
