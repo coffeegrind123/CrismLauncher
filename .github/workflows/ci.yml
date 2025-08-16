@@ -227,52 +227,120 @@ jobs:
           artifact-name: ${{ matrix.artifact-name }}
           msystem: ${{ matrix.msystem }}
 
-      - name: Rename artifacts to proper Prism Launcher format
+      - name: Prepare release artifacts
         shell: bash
         run: |
-          # Rename artifacts to match official Prism Launcher naming
+          echo "🔍 Checking what artifacts were created..."
+          echo "Current directory contents:"
+          ls -la
+          
+          echo ""
+          echo "🏗️ Preparing release artifacts for ${{ matrix.artifact-name }}..."
+          
+          # Create release directory
+          mkdir -p release-artifacts
+          
           case "${{ matrix.artifact-name }}" in
             "Linux")
-              if [ -f *.tar.gz ]; then
-                mv *.tar.gz "PrismLauncher-Linux-Qt6-${{ steps.version-info.outputs.version }}.tar.gz"
+              # Look for Linux artifacts
+              if ls *.tar.gz 1> /dev/null 2>&1; then
+                for file in *.tar.gz; do
+                  cp "$file" "release-artifacts/PrismLauncher-Linux-Qt6-${{ steps.version-info.outputs.version }}.tar.gz"
+                  echo "✅ Copied: $file → PrismLauncher-Linux-Qt6-${{ steps.version-info.outputs.version }}.tar.gz"
+                done
               fi
-              if [ -f *.AppImage ]; then
-                mv *.AppImage "PrismLauncher-Linux-x86_64.AppImage"
+              if ls *.AppImage 1> /dev/null 2>&1; then
+                for file in *.AppImage; do
+                  cp "$file" "release-artifacts/PrismLauncher-Linux-x86_64.AppImage"
+                  echo "✅ Copied: $file → PrismLauncher-Linux-x86_64.AppImage"
+                done
               fi
-              if [ -f *.deb ]; then
-                mv *.deb "PrismLauncher-Linux-${{ steps.version-info.outputs.version }}.deb"
+              if ls *.deb 1> /dev/null 2>&1; then
+                for file in *.deb; do
+                  cp "$file" "release-artifacts/PrismLauncher-Linux-${{ steps.version-info.outputs.version }}.deb"
+                  echo "✅ Copied: $file → PrismLauncher-Linux-${{ steps.version-info.outputs.version }}.deb"
+                done
               fi
               ;;
             "Linux-aarch64")
-              if [ -f *.tar.gz ]; then
-                mv *.tar.gz "PrismLauncher-Linux-Qt6-arm64-${{ steps.version-info.outputs.version }}.tar.gz"
+              if ls *.tar.gz 1> /dev/null 2>&1; then
+                for file in *.tar.gz; do
+                  cp "$file" "release-artifacts/PrismLauncher-Linux-Qt6-arm64-${{ steps.version-info.outputs.version }}.tar.gz"
+                  echo "✅ Copied: $file → PrismLauncher-Linux-Qt6-arm64-${{ steps.version-info.outputs.version }}.tar.gz"
+                done
               fi
-              if [ -f *.AppImage ]; then
-                mv *.AppImage "PrismLauncher-Linux-aarch64.AppImage"
+              if ls *.AppImage 1> /dev/null 2>&1; then
+                for file in *.AppImage; do
+                  cp "$file" "release-artifacts/PrismLauncher-Linux-aarch64.AppImage"
+                  echo "✅ Copied: $file → PrismLauncher-Linux-aarch64.AppImage"
+                done
               fi
               ;;
             "Windows-MinGW-w64")
-              if [ -f *.zip ]; then
-                mv *.zip "PrismLauncher-Windows-MinGW-w64-${{ steps.version-info.outputs.version }}.zip"
+              # Copy all Windows artifacts with proper naming
+              if ls *Portable*.zip 1> /dev/null 2>&1; then
+                for file in *Portable*.zip; do
+                  cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-w64-Portable-${{ steps.version-info.outputs.version }}.zip"
+                  echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-w64-Portable-${{ steps.version-info.outputs.version }}.zip"
+                done
+              fi
+              if ls *Setup*.exe 1> /dev/null 2>&1; then
+                for file in *Setup*.exe; do
+                  cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-w64-Setup-${{ steps.version-info.outputs.version }}.exe"
+                  echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-w64-Setup-${{ steps.version-info.outputs.version }}.exe"
+                done
+              fi
+              # Also copy main zip if it exists
+              if ls PrismLauncher-Windows-*.zip 1> /dev/null 2>&1; then
+                for file in PrismLauncher-Windows-*.zip; do
+                  if [[ ! "$file" =~ Portable ]]; then
+                    cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-w64-${{ steps.version-info.outputs.version }}.zip"
+                    echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-w64-${{ steps.version-info.outputs.version }}.zip"
+                  fi
+                done
               fi
               ;;
             "Windows-MinGW-arm64")
-              if [ -f *.zip ]; then
-                mv *.zip "PrismLauncher-Windows-MinGW-arm64-${{ steps.version-info.outputs.version }}.zip"
+              if ls *Portable*.zip 1> /dev/null 2>&1; then
+                for file in *Portable*.zip; do
+                  cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-arm64-Portable-${{ steps.version-info.outputs.version }}.zip"
+                  echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-arm64-Portable-${{ steps.version-info.outputs.version }}.zip"
+                done
+              fi
+              if ls *Setup*.exe 1> /dev/null 2>&1; then
+                for file in *Setup*.exe; do
+                  cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-arm64-Setup-${{ steps.version-info.outputs.version }}.exe"
+                  echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-arm64-Setup-${{ steps.version-info.outputs.version }}.exe"
+                done
+              fi
+              if ls PrismLauncher-Windows-*.zip 1> /dev/null 2>&1; then
+                for file in PrismLauncher-Windows-*.zip; do
+                  if [[ ! "$file" =~ Portable ]]; then
+                    cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-arm64-${{ steps.version-info.outputs.version }}.zip"
+                    echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-arm64-${{ steps.version-info.outputs.version }}.zip"
+                  fi
+                done
               fi
               ;;
             "macOS")
-              if [ -f *.zip ]; then
-                mv *.zip "PrismLauncher-macOS-${{ steps.version-info.outputs.version }}.zip"
+              if ls *.zip 1> /dev/null 2>&1; then
+                for file in *.zip; do
+                  cp "$file" "release-artifacts/PrismLauncher-macOS-${{ steps.version-info.outputs.version }}.zip"
+                  echo "✅ Copied: $file → PrismLauncher-macOS-${{ steps.version-info.outputs.version }}.zip"
+                done
               fi
-              if [ -f *.dmg ]; then
-                mv *.dmg "PrismLauncher-macOS-${{ steps.version-info.outputs.version }}.dmg"
+              if ls *.dmg 1> /dev/null 2>&1; then
+                for file in *.dmg; do
+                  cp "$file" "release-artifacts/PrismLauncher-macOS-${{ steps.version-info.outputs.version }}.dmg"
+                  echo "✅ Copied: $file → PrismLauncher-macOS-${{ steps.version-info.outputs.version }}.dmg"
+                done
               fi
               ;;
           esac
           
-          echo "Renamed artifacts:"
-          ls -la PrismLauncher-* 2>/dev/null || echo "No PrismLauncher artifacts found"
+          echo ""
+          echo "📦 Final release artifacts:"
+          ls -la release-artifacts/ 2>/dev/null || echo "No release artifacts created"
 
       # Store build info for README generation
       - name: Save build metadata
@@ -331,12 +399,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.artifact-name }}
-          path: |
-            PrismLauncher-*.zip
-            PrismLauncher-*.tar.gz
-            PrismLauncher-*.dmg
-            PrismLauncher-*.AppImage
-            PrismLauncher-*.deb
+          path: release-artifacts/*
           if-no-files-found: warn
 
   # Create GitHub Release with all artifacts
@@ -382,7 +445,7 @@ jobs:
           
           # The download creates subdirectories for each artifact
           # Move all files to the root of release-assets and flatten directory structure
-          find release-assets -mindepth 2 -type f \( -name "PrismLauncher-*.zip" -o -name "PrismLauncher-*.tar.gz" -o -name "PrismLauncher-*.dmg" -o -name "PrismLauncher-*.AppImage" -o -name "PrismLauncher-*.deb" \) -exec mv {} release-assets/ \;
+          find release-assets -mindepth 2 -type f \( -name "PrismLauncher-*.zip" -o -name "PrismLauncher-*.tar.gz" -o -name "PrismLauncher-*.dmg" -o -name "PrismLauncher-*.AppImage" -o -name "PrismLauncher-*.deb" -o -name "PrismLauncher-*.exe" \) -exec mv {} release-assets/ \;
           
           # Clean up empty directories
           find release-assets -mindepth 1 -type d -empty -delete
@@ -391,7 +454,7 @@ jobs:
           find release-assets -type f | sort
           
           # Validate we have assets
-          ASSET_COUNT=$(find release-assets -type f \( -name "PrismLauncher-*.zip" -o -name "PrismLauncher-*.tar.gz" -o -name "PrismLauncher-*.dmg" -o -name "PrismLauncher-*.AppImage" -o -name "PrismLauncher-*.deb" \) | wc -l)
+          ASSET_COUNT=$(find release-assets -type f \( -name "PrismLauncher-*.zip" -o -name "PrismLauncher-*.tar.gz" -o -name "PrismLauncher-*.dmg" -o -name "PrismLauncher-*.AppImage" -o -name "PrismLauncher-*.deb" -o -name "PrismLauncher-*.exe" \) | wc -l)
           
           if [ $ASSET_COUNT -eq 0 ]; then
             echo "❌ ERROR: No release assets found!"
@@ -477,7 +540,8 @@ jobs:
           - **Linux ARM64**: For ARM64-based Linux systems
 
           ### 🪟 Windows  
-          - **Windows MinGW**: For Windows systems
+          - **Windows MinGW Portable**: Portable ZIP version
+          - **Windows MinGW Setup**: Installer executable
           - **Windows ARM64**: For ARM64 Windows devices
 
           ### 🍎 macOS
@@ -491,9 +555,11 @@ jobs:
           - **Portable**: Extract and run
 
           ### Windows
-          - **Portable**: Extract ZIP and run `launcher.exe`
+          - **Portable**: Extract ZIP and run `prismlauncher.exe`
+          - **Setup**: Run the installer executable
 
           ### macOS  
+          - **ZIP**: Extract and move to Applications folder
           - **DMG**: Open and drag to Applications folder
 
           ---
@@ -561,15 +627,51 @@ jobs:
       - name: Generate README with release download links
         shell: bash
         run: |
-          # Get the latest release information
+          echo "🔍 Fetching latest release information..."
+          
+          # Wait a moment for GitHub API to sync
+          sleep 10
+          
+          # Get the latest release information with error handling
+          set +e  # Don't exit on error
           LATEST_RELEASE_JSON=$(gh api \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "/repos/${{ github.repository }}/releases/latest")
+            "/repos/${{ github.repository }}/releases/latest" 2>/dev/null)
+          API_EXIT_CODE=$?
+          set -e  # Re-enable exit on error
           
-          LATEST_TAG=$(echo "$LATEST_RELEASE_JSON" | jq -r '.tag_name')
-          LATEST_RELEASE_DATE=$(echo "$LATEST_RELEASE_JSON" | jq -r '.published_at' | cut -d'T' -f1)
-          LATEST_RELEASE_URL=$(echo "$LATEST_RELEASE_JSON" | jq -r '.html_url')
+          if [ $API_EXIT_CODE -ne 0 ] || [ -z "$LATEST_RELEASE_JSON" ] || [ "$LATEST_RELEASE_JSON" = "null" ]; then
+            echo "⚠️ Could not fetch latest release info, checking all releases..."
+            
+            # Fallback: get the most recent release from all releases
+            ALL_RELEASES_JSON=$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "/repos/${{ github.repository }}/releases" 2>/dev/null || echo "[]")
+            
+            if [ "$ALL_RELEASES_JSON" != "[]" ] && [ -n "$ALL_RELEASES_JSON" ]; then
+              LATEST_RELEASE_JSON=$(echo "$ALL_RELEASES_JSON" | jq '.[0]' 2>/dev/null || echo "{}")
+            else
+              echo "❌ No releases found, creating README without download links"
+              LATEST_RELEASE_JSON="{}"
+            fi
+          fi
+          
+          # Extract release information with fallbacks
+          if [ "$LATEST_RELEASE_JSON" != "{}" ] && [ -n "$LATEST_RELEASE_JSON" ]; then
+            LATEST_TAG=$(echo "$LATEST_RELEASE_JSON" | jq -r '.tag_name // "unknown"')
+            LATEST_RELEASE_DATE=$(echo "$LATEST_RELEASE_JSON" | jq -r '.published_at // "unknown"' | cut -d'T' -f1)
+            LATEST_RELEASE_URL=$(echo "$LATEST_RELEASE_JSON" | jq -r '.html_url // "https://github.com/${{ github.repository }}/releases"')
+            
+            echo "✅ Found release: $LATEST_TAG ($LATEST_RELEASE_DATE)"
+          else
+            echo "⚠️ No release data available, using fallbacks"
+            LATEST_TAG="unknown"
+            LATEST_RELEASE_DATE="unknown"
+            LATEST_RELEASE_URL="https://github.com/${{ github.repository }}/releases"
+            LATEST_RELEASE_JSON="{\"assets\":[]}"
+          fi
           
           # Start README generation
           cat > README.md << 'HEADER'
@@ -590,15 +692,30 @@ jobs:
           |----------|----------|
           HEADER
 
-          # Get all release assets
-          echo "$LATEST_RELEASE_JSON" | jq -r '.assets[] | "\(.name)|\(.browser_download_url)"' > assets_list.txt
+          # Get all release assets with error handling
+          if [ "$LATEST_RELEASE_JSON" != "{}" ] && [ -n "$LATEST_RELEASE_JSON" ]; then
+            echo "$LATEST_RELEASE_JSON" | jq -r '.assets[]? | "\(.name)|\(.browser_download_url)"' > assets_list.txt 2>/dev/null || touch assets_list.txt
+          else
+            touch assets_list.txt
+          fi
+          
+          # Check if we have any assets
+          ASSET_COUNT=$(wc -l < assets_list.txt)
+          echo "📦 Found $ASSET_COUNT release assets"
           
           # Process build metadata and create download table with direct release links
-          if [ -d "build-metadata" ] && [ "$(ls -A build-metadata)" ]; then
+          if [ -d "build-metadata" ] && [ "$(ls -A build-metadata 2>/dev/null)" ]; then
+            echo "📋 Processing $(ls build-metadata/*.json 2>/dev/null | wc -l) build metadata files..."
             for metadata_file in build-metadata/*.json; do
               if [ -f "$metadata_file" ]; then
-                ARTIFACT_NAME=$(jq -r '.artifact_name' "$metadata_file")
-                VERSION=$(jq -r '.version' "$metadata_file")
+                echo "  Processing: $(basename "$metadata_file")"
+                ARTIFACT_NAME=$(jq -r '.artifact_name // "unknown"' "$metadata_file" 2>/dev/null || echo "unknown")
+                VERSION=$(jq -r '.version // "unknown"' "$metadata_file" 2>/dev/null || echo "unknown")
+                
+                if [ "$ARTIFACT_NAME" = "unknown" ]; then
+                  echo "    ⚠️ Warning: Could not parse artifact name from $metadata_file"
+                  continue
+                fi
                 
                 # Process each platform and find matching assets
                 case "$ARTIFACT_NAME" in
@@ -658,20 +775,66 @@ jobs:
                     ;;
                   "Windows-MinGW-w64")
                     DISPLAY_NAME="Windows MinGW x64"
-                    ASSET=$(grep "PrismLauncher-Windows-MinGW-w64.*\.zip" assets_list.txt | head -1)
-                    if [ -n "$ASSET" ]; then
-                      FILENAME=$(echo "$ASSET" | cut -d'|' -f1)
-                      URL=$(echo "$ASSET" | cut -d'|' -f2)
+                    # Look for portable zip, setup exe, and main zip
+                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-w64-Portable.*\.zip" assets_list.txt | head -1)
+                    SETUP_EXE=$(grep "PrismLauncher-Windows-MinGW-w64-Setup.*\.exe" assets_list.txt | head -1)
+                    MAIN_ZIP=$(grep "PrismLauncher-Windows-MinGW-w64-[^P][^o].*\.zip" assets_list.txt | head -1)
+                    
+                    DOWNLOAD_LINKS=""
+                    if [ -n "$PORTABLE_ZIP" ]; then
+                      FILENAME=$(echo "$PORTABLE_ZIP" | cut -d'|' -f1)
+                      URL=$(echo "$PORTABLE_ZIP" | cut -d'|' -f2)
                       DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                    fi
+                    if [ -n "$SETUP_EXE" ]; then
+                      FILENAME=$(echo "$SETUP_EXE" | cut -d'|' -f1)
+                      URL=$(echo "$SETUP_EXE" | cut -d'|' -f2)
+                      if [ -n "$DOWNLOAD_LINKS" ]; then
+                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                      else
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      fi
+                    fi
+                    if [ -n "$MAIN_ZIP" ]; then
+                      FILENAME=$(echo "$MAIN_ZIP" | cut -d'|' -f1)
+                      URL=$(echo "$MAIN_ZIP" | cut -d'|' -f2)
+                      if [ -n "$DOWNLOAD_LINKS" ]; then
+                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                      else
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      fi
                     fi
                     ;;
                   "Windows-MinGW-arm64")
                     DISPLAY_NAME="Windows MinGW ARM64"
-                    ASSET=$(grep "PrismLauncher-Windows-MinGW-arm64.*\.zip" assets_list.txt | head -1)
-                    if [ -n "$ASSET" ]; then
-                      FILENAME=$(echo "$ASSET" | cut -d'|' -f1)
-                      URL=$(echo "$ASSET" | cut -d'|' -f2)
+                    # Look for portable zip, setup exe, and main zip
+                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-arm64-Portable.*\.zip" assets_list.txt | head -1)
+                    SETUP_EXE=$(grep "PrismLauncher-Windows-MinGW-arm64-Setup.*\.exe" assets_list.txt | head -1)
+                    MAIN_ZIP=$(grep "PrismLauncher-Windows-MinGW-arm64-[^P][^o].*\.zip" assets_list.txt | head -1)
+                    
+                    DOWNLOAD_LINKS=""
+                    if [ -n "$PORTABLE_ZIP" ]; then
+                      FILENAME=$(echo "$PORTABLE_ZIP" | cut -d'|' -f1)
+                      URL=$(echo "$PORTABLE_ZIP" | cut -d'|' -f2)
                       DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                    fi
+                    if [ -n "$SETUP_EXE" ]; then
+                      FILENAME=$(echo "$SETUP_EXE" | cut -d'|' -f1)
+                      URL=$(echo "$SETUP_EXE" | cut -d'|' -f2)
+                      if [ -n "$DOWNLOAD_LINKS" ]; then
+                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                      else
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      fi
+                    fi
+                    if [ -n "$MAIN_ZIP" ]; then
+                      FILENAME=$(echo "$MAIN_ZIP" | cut -d'|' -f1)
+                      URL=$(echo "$MAIN_ZIP" | cut -d'|' -f2)
+                      if [ -n "$DOWNLOAD_LINKS" ]; then
+                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                      else
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      fi
                     fi
                     ;;
                   "macOS")
@@ -710,15 +873,28 @@ jobs:
                 
                 # Fallback if no download links found
                 if [ -z "$DOWNLOAD_LINKS" ]; then
-                  DOWNLOAD_LINKS="[Download](https://github.com/${{ github.repository }}/releases/latest)"
+                  if [ "$LATEST_RELEASE_URL" != "https://github.com/${{ github.repository }}/releases" ]; then
+                    DOWNLOAD_LINKS="[Download]($LATEST_RELEASE_URL)"
+                  else
+                    DOWNLOAD_LINKS="[Releases](https://github.com/${{ github.repository }}/releases)"
+                  fi
                 fi
                 
                 echo "| **$DISPLAY_NAME** | $DOWNLOAD_LINKS |" >> README.md
               fi
             done
           else
+            echo "⚠️ No build metadata found, creating basic README"
             echo "| *Building...* | Check back soon |" >> README.md
           fi
+
+          # Debug information
+          echo ""
+          echo "🔍 Debug Information:"
+          echo "  • Release Tag: $LATEST_TAG"
+          echo "  • Release Date: $LATEST_RELEASE_DATE"
+          echo "  • Assets Found: $ASSET_COUNT"
+          echo "  • Metadata Files: $(ls build-metadata/*.json 2>/dev/null | wc -l || echo 0)"
 
           # Clean up temporary file
           rm -f assets_list.txt
@@ -746,6 +922,7 @@ jobs:
 
           ### macOS
           - **ZIP**: Extract and move to Applications folder
+          - **DMG**: Open and drag to Applications folder
 
           ## Features
 
@@ -776,7 +953,12 @@ jobs:
           FOOTER
           
           # Replace placeholders
-          sed -i "s|BUILD_TIME_PLACEHOLDER|$(date -u +"%Y-%m-%d %H:%M UTC")|g" README.md
+          CURRENT_TIME=$(date -u +"%Y-%m-%d %H:%M UTC")
+          sed -i "s|BUILD_TIME_PLACEHOLDER|$CURRENT_TIME|g" README.md
+          
+          echo "✅ README.md generated successfully"
+          echo "📄 README.md preview (first 10 lines):"
+          head -10 README.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
