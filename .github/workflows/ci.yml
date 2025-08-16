@@ -590,6 +590,9 @@ jobs:
           |----------|----------|
           HEADER
 
+          # Get all release assets
+          echo "$LATEST_RELEASE_JSON" | jq -r '.assets[] | "\(.name)|\(.browser_download_url)"' > assets_list.txt
+          
           # Process build metadata and create download table with direct release links
           if [ -d "build-metadata" ] && [ "$(ls -A build-metadata)" ]; then
             for metadata_file in build-metadata/*.json; do
@@ -597,52 +600,128 @@ jobs:
                 ARTIFACT_NAME=$(jq -r '.artifact_name' "$metadata_file")
                 VERSION=$(jq -r '.version' "$metadata_file")
                 
-                # Map artifact names to proper Prism Launcher naming
+                # Process each platform and find matching assets
                 case "$ARTIFACT_NAME" in
                   "Linux")
                     DISPLAY_NAME="Linux (Qt6)"
-                    FILENAME="PrismLauncher-Linux-Qt6-${VERSION}.tar.gz"
+                    # Look for tar.gz, AppImage, and deb files
+                    TARBALL=$(grep "PrismLauncher-Linux-Qt6.*\.tar\.gz" assets_list.txt | head -1)
+                    APPIMAGE=$(grep "PrismLauncher-Linux.*\.AppImage" assets_list.txt | head -1)
+                    DEB=$(grep "PrismLauncher-Linux.*\.deb" assets_list.txt | head -1)
+                    
+                    DOWNLOAD_LINKS=""
+                    if [ -n "$TARBALL" ]; then
+                      FILENAME=$(echo "$TARBALL" | cut -d'|' -f1)
+                      URL=$(echo "$TARBALL" | cut -d'|' -f2)
+                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                    fi
+                    if [ -n "$APPIMAGE" ]; then
+                      FILENAME=$(echo "$APPIMAGE" | cut -d'|' -f1)
+                      URL=$(echo "$APPIMAGE" | cut -d'|' -f2)
+                      if [ -n "$DOWNLOAD_LINKS" ]; then
+                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                      else
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      fi
+                    fi
+                    if [ -n "$DEB" ]; then
+                      FILENAME=$(echo "$DEB" | cut -d'|' -f1)
+                      URL=$(echo "$DEB" | cut -d'|' -f2)
+                      if [ -n "$DOWNLOAD_LINKS" ]; then
+                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                      else
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      fi
+                    fi
                     ;;
                   "Linux-aarch64")
                     DISPLAY_NAME="Linux ARM64 (Qt6)"  
-                    FILENAME="PrismLauncher-Linux-Qt6-arm64-${VERSION}.tar.gz"
+                    # Look for tar.gz and AppImage files
+                    TARBALL=$(grep "PrismLauncher-Linux-Qt6-arm64.*\.tar\.gz" assets_list.txt | head -1)
+                    APPIMAGE=$(grep "PrismLauncher-Linux-aarch64.*\.AppImage" assets_list.txt | head -1)
+                    
+                    DOWNLOAD_LINKS=""
+                    if [ -n "$TARBALL" ]; then
+                      FILENAME=$(echo "$TARBALL" | cut -d'|' -f1)
+                      URL=$(echo "$TARBALL" | cut -d'|' -f2)
+                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                    fi
+                    if [ -n "$APPIMAGE" ]; then
+                      FILENAME=$(echo "$APPIMAGE" | cut -d'|' -f1)
+                      URL=$(echo "$APPIMAGE" | cut -d'|' -f2)
+                      if [ -n "$DOWNLOAD_LINKS" ]; then
+                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                      else
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      fi
+                    fi
                     ;;
                   "Windows-MinGW-w64")
                     DISPLAY_NAME="Windows MinGW x64"
-                    FILENAME="PrismLauncher-Windows-MinGW-w64-${VERSION}.zip"
+                    ASSET=$(grep "PrismLauncher-Windows-MinGW-w64.*\.zip" assets_list.txt | head -1)
+                    if [ -n "$ASSET" ]; then
+                      FILENAME=$(echo "$ASSET" | cut -d'|' -f1)
+                      URL=$(echo "$ASSET" | cut -d'|' -f2)
+                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                    fi
                     ;;
                   "Windows-MinGW-arm64")
                     DISPLAY_NAME="Windows MinGW ARM64"
-                    FILENAME="PrismLauncher-Windows-MinGW-arm64-${VERSION}.zip"
+                    ASSET=$(grep "PrismLauncher-Windows-MinGW-arm64.*\.zip" assets_list.txt | head -1)
+                    if [ -n "$ASSET" ]; then
+                      FILENAME=$(echo "$ASSET" | cut -d'|' -f1)
+                      URL=$(echo "$ASSET" | cut -d'|' -f2)
+                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                    fi
                     ;;
                   "macOS")
                     DISPLAY_NAME="macOS"
-                    FILENAME="PrismLauncher-macOS-${VERSION}.zip"
+                    # Look for both zip and dmg files
+                    ZIP_ASSET=$(grep "PrismLauncher-macOS.*\.zip" assets_list.txt | head -1)
+                    DMG_ASSET=$(grep "PrismLauncher-macOS.*\.dmg" assets_list.txt | head -1)
+                    
+                    DOWNLOAD_LINKS=""
+                    if [ -n "$ZIP_ASSET" ]; then
+                      FILENAME=$(echo "$ZIP_ASSET" | cut -d'|' -f1)
+                      URL=$(echo "$ZIP_ASSET" | cut -d'|' -f2)
+                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                    fi
+                    if [ -n "$DMG_ASSET" ]; then
+                      FILENAME=$(echo "$DMG_ASSET" | cut -d'|' -f1)
+                      URL=$(echo "$DMG_ASSET" | cut -d'|' -f2)
+                      if [ -n "$DOWNLOAD_LINKS" ]; then
+                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                      else
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      fi
+                    fi
                     ;;
                   *)
                     DISPLAY_NAME="$ARTIFACT_NAME"
-                    FILENAME="PrismLauncher-${ARTIFACT_NAME}-${VERSION}.zip"
+                    # Generic search for any matching file
+                    ASSET=$(grep -i "$ARTIFACT_NAME" assets_list.txt | head -1)
+                    if [ -n "$ASSET" ]; then
+                      FILENAME=$(echo "$ASSET" | cut -d'|' -f1)
+                      URL=$(echo "$ASSET" | cut -d'|' -f2)
+                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                    fi
                     ;;
                 esac
                 
-                # Find matching release asset and create direct download link
-                ASSET_URL=$(echo "$LATEST_RELEASE_JSON" | jq -r --arg artifact "$ARTIFACT_NAME" '.assets[] | select(.name | contains($artifact)) | .browser_download_url' | head -1)
-                
-                if [ -n "$ASSET_URL" ] && [ "$ASSET_URL" != "null" ]; then
-                  # Use actual filename from release
-                  ACTUAL_FILENAME=$(echo "$LATEST_RELEASE_JSON" | jq -r --arg artifact "$ARTIFACT_NAME" '.assets[] | select(.name | contains($artifact)) | .name' | head -1)
-                  DOWNLOAD_LINK="[${ACTUAL_FILENAME}]($ASSET_URL)"
-                else
-                  # Fallback to releases page
-                  DOWNLOAD_LINK="[Download](https://github.com/${{ github.repository }}/releases/latest)"
+                # Fallback if no download links found
+                if [ -z "$DOWNLOAD_LINKS" ]; then
+                  DOWNLOAD_LINKS="[Download](https://github.com/${{ github.repository }}/releases/latest)"
                 fi
                 
-                echo "| **$DISPLAY_NAME** | $DOWNLOAD_LINK |" >> README.md
+                echo "| **$DISPLAY_NAME** | $DOWNLOAD_LINKS |" >> README.md
               fi
             done
           else
             echo "| *Building...* | Check back soon |" >> README.md
           fi
+
+          # Clean up temporary file
+          rm -f assets_list.txt
 
           # Add footer sections
           cat >> README.md << 'FOOTER'
