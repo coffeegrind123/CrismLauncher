@@ -709,178 +709,262 @@ jobs:
             for metadata_file in build-metadata/*.json; do
               if [ -f "$metadata_file" ]; then
                 echo "  Processing: $(basename "$metadata_file")"
+                
+                # Debug: show file contents
+                echo "    File contents:"
+                cat "$metadata_file" || echo "    Error reading file"
+                
                 ARTIFACT_NAME=$(jq -r '.artifact_name // "unknown"' "$metadata_file" 2>/dev/null || echo "unknown")
                 VERSION=$(jq -r '.version // "unknown"' "$metadata_file" 2>/dev/null || echo "unknown")
+                
+                echo "    Parsed - Artifact: $ARTIFACT_NAME, Version: $VERSION"
                 
                 if [ "$ARTIFACT_NAME" = "unknown" ]; then
                   echo "    ⚠️ Warning: Could not parse artifact name from $metadata_file"
                   continue
                 fi
                 
+                # Debug: show current assets list preview
+                echo "    Available assets (first 3):"
+                head -3 assets_list.txt 2>/dev/null || echo "    No assets found"
+                
                 # Process each platform and find matching assets
+                echo "    Processing platform: $ARTIFACT_NAME"
+                
+                # Set error handling for this section
+                set +e  # Don't exit on error in this section
+                
                 case "$ARTIFACT_NAME" in
                   "Linux")
+                    echo "    → Processing Linux platform"
                     DISPLAY_NAME="Linux (Qt6)"
                     # Look for tar.gz, AppImage, and deb files
-                    TARBALL=$(grep "PrismLauncher-Linux-Qt6.*\.tar\.gz" assets_list.txt | head -1)
-                    APPIMAGE=$(grep "PrismLauncher-Linux.*\.AppImage" assets_list.txt | head -1)
-                    DEB=$(grep "PrismLauncher-Linux.*\.deb" assets_list.txt | head -1)
+                    TARBALL=$(grep "PrismLauncher-Linux-Qt6.*\.tar\.gz" assets_list.txt 2>/dev/null | head -1)
+                    APPIMAGE=$(grep "PrismLauncher-Linux.*\.AppImage" assets_list.txt 2>/dev/null | head -1)
+                    DEB=$(grep "PrismLauncher-Linux.*\.deb" assets_list.txt 2>/dev/null | head -1)
+                    
+                    echo "    → Found: TARBALL='$TARBALL', APPIMAGE='$APPIMAGE', DEB='$DEB'"
                     
                     DOWNLOAD_LINKS=""
                     if [ -n "$TARBALL" ]; then
-                      FILENAME=$(echo "$TARBALL" | cut -d'|' -f1)
-                      URL=$(echo "$TARBALL" | cut -d'|' -f2)
-                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$TARBALL" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$TARBALL" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        echo "    → Added tarball link: $FILENAME"
+                      fi
                     fi
                     if [ -n "$APPIMAGE" ]; then
-                      FILENAME=$(echo "$APPIMAGE" | cut -d'|' -f1)
-                      URL=$(echo "$APPIMAGE" | cut -d'|' -f2)
-                      if [ -n "$DOWNLOAD_LINKS" ]; then
-                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
-                      else
-                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$APPIMAGE" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$APPIMAGE" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        if [ -n "$DOWNLOAD_LINKS" ]; then
+                          DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                        else
+                          DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        fi
+                        echo "    → Added AppImage link: $FILENAME"
                       fi
                     fi
                     if [ -n "$DEB" ]; then
-                      FILENAME=$(echo "$DEB" | cut -d'|' -f1)
-                      URL=$(echo "$DEB" | cut -d'|' -f2)
-                      if [ -n "$DOWNLOAD_LINKS" ]; then
-                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
-                      else
-                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$DEB" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$DEB" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        if [ -n "$DOWNLOAD_LINKS" ]; then
+                          DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                        else
+                          DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        fi
+                        echo "    → Added DEB link: $FILENAME"
                       fi
                     fi
                     ;;
                   "Linux-aarch64")
+                    echo "    → Processing Linux ARM64 platform"
                     DISPLAY_NAME="Linux ARM64 (Qt6)"  
                     # Look for tar.gz and AppImage files
-                    TARBALL=$(grep "PrismLauncher-Linux-Qt6-arm64.*\.tar\.gz" assets_list.txt | head -1)
-                    APPIMAGE=$(grep "PrismLauncher-Linux-aarch64.*\.AppImage" assets_list.txt | head -1)
+                    TARBALL=$(grep "PrismLauncher-Linux-Qt6-arm64.*\.tar\.gz" assets_list.txt 2>/dev/null | head -1)
+                    APPIMAGE=$(grep "PrismLauncher-Linux-aarch64.*\.AppImage" assets_list.txt 2>/dev/null | head -1)
+                    
+                    echo "    → Found: TARBALL='$TARBALL', APPIMAGE='$APPIMAGE'"
                     
                     DOWNLOAD_LINKS=""
                     if [ -n "$TARBALL" ]; then
-                      FILENAME=$(echo "$TARBALL" | cut -d'|' -f1)
-                      URL=$(echo "$TARBALL" | cut -d'|' -f2)
-                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$TARBALL" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$TARBALL" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        echo "    → Added tarball link: $FILENAME"
+                      fi
                     fi
                     if [ -n "$APPIMAGE" ]; then
-                      FILENAME=$(echo "$APPIMAGE" | cut -d'|' -f1)
-                      URL=$(echo "$APPIMAGE" | cut -d'|' -f2)
-                      if [ -n "$DOWNLOAD_LINKS" ]; then
-                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
-                      else
-                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$APPIMAGE" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$APPIMAGE" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        if [ -n "$DOWNLOAD_LINKS" ]; then
+                          DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                        else
+                          DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        fi
+                        echo "    → Added AppImage link: $FILENAME"
                       fi
                     fi
                     ;;
                   "Windows-MinGW-w64")
+                    echo "    → Processing Windows x64 platform"
                     DISPLAY_NAME="Windows MinGW x64"
                     # Look for portable zip, setup exe, and main zip
-                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-w64-Portable.*\.zip" assets_list.txt | head -1)
-                    SETUP_EXE=$(grep "PrismLauncher-Windows-MinGW-w64-Setup.*\.exe" assets_list.txt | head -1)
-                    MAIN_ZIP=$(grep "PrismLauncher-Windows-MinGW-w64-[^P][^o].*\.zip" assets_list.txt | head -1)
+                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-w64-Portable.*\.zip" assets_list.txt 2>/dev/null | head -1)
+                    SETUP_EXE=$(grep "PrismLauncher-Windows-MinGW-w64-Setup.*\.exe" assets_list.txt 2>/dev/null | head -1)
+                    MAIN_ZIP=$(grep "PrismLauncher-Windows-MinGW-w64-[^P][^o].*\.zip" assets_list.txt 2>/dev/null | head -1)
+                    
+                    echo "    → Found: PORTABLE='$PORTABLE_ZIP', SETUP='$SETUP_EXE', MAIN='$MAIN_ZIP'"
                     
                     DOWNLOAD_LINKS=""
                     if [ -n "$PORTABLE_ZIP" ]; then
-                      FILENAME=$(echo "$PORTABLE_ZIP" | cut -d'|' -f1)
-                      URL=$(echo "$PORTABLE_ZIP" | cut -d'|' -f2)
-                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$PORTABLE_ZIP" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$PORTABLE_ZIP" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        echo "    → Added portable link: $FILENAME"
+                      fi
                     fi
                     if [ -n "$SETUP_EXE" ]; then
-                      FILENAME=$(echo "$SETUP_EXE" | cut -d'|' -f1)
-                      URL=$(echo "$SETUP_EXE" | cut -d'|' -f2)
-                      if [ -n "$DOWNLOAD_LINKS" ]; then
-                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
-                      else
-                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$SETUP_EXE" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$SETUP_EXE" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        if [ -n "$DOWNLOAD_LINKS" ]; then
+                          DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                        else
+                          DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        fi
+                        echo "    → Added setup link: $FILENAME"
                       fi
                     fi
                     if [ -n "$MAIN_ZIP" ]; then
-                      FILENAME=$(echo "$MAIN_ZIP" | cut -d'|' -f1)
-                      URL=$(echo "$MAIN_ZIP" | cut -d'|' -f2)
-                      if [ -n "$DOWNLOAD_LINKS" ]; then
-                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
-                      else
-                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$MAIN_ZIP" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$MAIN_ZIP" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        if [ -n "$DOWNLOAD_LINKS" ]; then
+                          DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                        else
+                          DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        fi
+                        echo "    → Added main link: $FILENAME"
                       fi
                     fi
                     ;;
                   "Windows-MinGW-arm64")
+                    echo "    → Processing Windows ARM64 platform"
                     DISPLAY_NAME="Windows MinGW ARM64"
                     # Look for portable zip, setup exe, and main zip
-                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-arm64-Portable.*\.zip" assets_list.txt | head -1)
-                    SETUP_EXE=$(grep "PrismLauncher-Windows-MinGW-arm64-Setup.*\.exe" assets_list.txt | head -1)
-                    MAIN_ZIP=$(grep "PrismLauncher-Windows-MinGW-arm64-[^P][^o].*\.zip" assets_list.txt | head -1)
+                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-arm64-Portable.*\.zip" assets_list.txt 2>/dev/null | head -1)
+                    SETUP_EXE=$(grep "PrismLauncher-Windows-MinGW-arm64-Setup.*\.exe" assets_list.txt 2>/dev/null | head -1)
+                    MAIN_ZIP=$(grep "PrismLauncher-Windows-MinGW-arm64-[^P][^o].*\.zip" assets_list.txt 2>/dev/null | head -1)
+                    
+                    echo "    → Found: PORTABLE='$PORTABLE_ZIP', SETUP='$SETUP_EXE', MAIN='$MAIN_ZIP'"
                     
                     DOWNLOAD_LINKS=""
                     if [ -n "$PORTABLE_ZIP" ]; then
-                      FILENAME=$(echo "$PORTABLE_ZIP" | cut -d'|' -f1)
-                      URL=$(echo "$PORTABLE_ZIP" | cut -d'|' -f2)
-                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$PORTABLE_ZIP" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$PORTABLE_ZIP" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        echo "    → Added portable link: $FILENAME"
+                      fi
                     fi
                     if [ -n "$SETUP_EXE" ]; then
-                      FILENAME=$(echo "$SETUP_EXE" | cut -d'|' -f1)
-                      URL=$(echo "$SETUP_EXE" | cut -d'|' -f2)
-                      if [ -n "$DOWNLOAD_LINKS" ]; then
-                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
-                      else
-                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$SETUP_EXE" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$SETUP_EXE" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        if [ -n "$DOWNLOAD_LINKS" ]; then
+                          DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                        else
+                          DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        fi
+                        echo "    → Added setup link: $FILENAME"
                       fi
                     fi
                     if [ -n "$MAIN_ZIP" ]; then
-                      FILENAME=$(echo "$MAIN_ZIP" | cut -d'|' -f1)
-                      URL=$(echo "$MAIN_ZIP" | cut -d'|' -f2)
-                      if [ -n "$DOWNLOAD_LINKS" ]; then
-                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
-                      else
-                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$MAIN_ZIP" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$MAIN_ZIP" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        if [ -n "$DOWNLOAD_LINKS" ]; then
+                          DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                        else
+                          DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        fi
+                        echo "    → Added main link: $FILENAME"
                       fi
                     fi
                     ;;
                   "macOS")
+                    echo "    → Processing macOS platform"
                     DISPLAY_NAME="macOS"
                     # Look for both zip and dmg files
-                    ZIP_ASSET=$(grep "PrismLauncher-macOS.*\.zip" assets_list.txt | head -1)
-                    DMG_ASSET=$(grep "PrismLauncher-macOS.*\.dmg" assets_list.txt | head -1)
+                    ZIP_ASSET=$(grep "PrismLauncher-macOS.*\.zip" assets_list.txt 2>/dev/null | head -1)
+                    DMG_ASSET=$(grep "PrismLauncher-macOS.*\.dmg" assets_list.txt 2>/dev/null | head -1)
+                    
+                    echo "    → Found: ZIP='$ZIP_ASSET', DMG='$DMG_ASSET'"
                     
                     DOWNLOAD_LINKS=""
                     if [ -n "$ZIP_ASSET" ]; then
-                      FILENAME=$(echo "$ZIP_ASSET" | cut -d'|' -f1)
-                      URL=$(echo "$ZIP_ASSET" | cut -d'|' -f2)
-                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$ZIP_ASSET" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$ZIP_ASSET" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        echo "    → Added ZIP link: $FILENAME"
+                      fi
                     fi
                     if [ -n "$DMG_ASSET" ]; then
-                      FILENAME=$(echo "$DMG_ASSET" | cut -d'|' -f1)
-                      URL=$(echo "$DMG_ASSET" | cut -d'|' -f2)
-                      if [ -n "$DOWNLOAD_LINKS" ]; then
-                        DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
-                      else
-                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$DMG_ASSET" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$DMG_ASSET" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        if [ -n "$DOWNLOAD_LINKS" ]; then
+                          DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
+                        else
+                          DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        fi
+                        echo "    → Added DMG link: $FILENAME"
                       fi
                     fi
                     ;;
                   *)
+                    echo "    → Processing unknown platform: $ARTIFACT_NAME"
                     DISPLAY_NAME="$ARTIFACT_NAME"
                     # Generic search for any matching file
-                    ASSET=$(grep -i "$ARTIFACT_NAME" assets_list.txt | head -1)
+                    ASSET=$(grep -i "$ARTIFACT_NAME" assets_list.txt 2>/dev/null | head -1)
+                    echo "    → Found: ASSET='$ASSET'"
+                    
+                    DOWNLOAD_LINKS=""
                     if [ -n "$ASSET" ]; then
-                      FILENAME=$(echo "$ASSET" | cut -d'|' -f1)
-                      URL=$(echo "$ASSET" | cut -d'|' -f2)
-                      DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                      FILENAME=$(echo "$ASSET" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$ASSET" | cut -d'|' -f2 2>/dev/null)
+                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
+                        echo "    → Added generic link: $FILENAME"
+                      fi
                     fi
                     ;;
                 esac
                 
+                # Re-enable exit on error
+                set -e
+                
                 # Fallback if no download links found
                 if [ -z "$DOWNLOAD_LINKS" ]; then
+                  echo "    ⚠️ No download links found for $ARTIFACT_NAME"
                   if [ "$LATEST_RELEASE_URL" != "https://github.com/${{ github.repository }}/releases" ]; then
                     DOWNLOAD_LINKS="[Download]($LATEST_RELEASE_URL)"
                   else
                     DOWNLOAD_LINKS="[Releases](https://github.com/${{ github.repository }}/releases)"
                   fi
+                else
+                  echo "    ✅ Generated download links for $ARTIFACT_NAME: $DOWNLOAD_LINKS"
                 fi
                 
                 echo "| **$DISPLAY_NAME** | $DOWNLOAD_LINKS |" >> README.md
+                echo "    ✅ Added table row for $DISPLAY_NAME"
               fi
             done
           else
