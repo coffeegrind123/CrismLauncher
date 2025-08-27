@@ -544,20 +544,9 @@ jobs:
           fi
           
           cat > RELEASE_BODY.md << EOF
-          🌈 Download from our official site at <https://prismlauncher.org/download>
-
           ## Changelog
-
-          ### Added
-          - Automatic mod download bypass for blocked CurseForge/Flame mods
-          - Direct download support for ATLauncher browser-required mods
-          
-          ### Fixed
           $(echo -e "$CHANGELOG")
 
-          ---
-
-          *Based on Prism Launcher with mod download modifications*
           EOF
 
       - name: Create GitHub Release
@@ -683,7 +672,7 @@ jobs:
           - Treats ATLauncher browser-required downloads as direct downloads
           - Allows automatic installation of previously restricted mods
 
-          ### Available Builds
+          ### Latest Builds
 
           | Platform | Download |
           |----------|----------|
