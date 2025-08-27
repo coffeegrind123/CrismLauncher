@@ -426,6 +426,8 @@ jobs:
           echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
           echo "timestamp=$(date -u +%Y%m%d_%H%M%S)" >> "$GITHUB_OUTPUT"
           echo "tag=v$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          # Generate a semantic version number based on date
+          echo "semantic_version=$(date -u +%Y.%m%d)" >> "$GITHUB_OUTPUT"
 
       - name: Create release directory
         run: mkdir -p release-assets
@@ -511,68 +513,57 @@ jobs:
 
       - name: Generate release body
         run: |
-          cat > RELEASE_BODY.md << 'EOF'
-          # 🚀 Prism Launcher with Dynamic API Keys
-
-          **Automated build with latest API keys from upstream Prism Launcher**
-
-          ## 🔑 Features
-          - ✅ **Dynamic API Key Integration** - Always up-to-date with upstream
-          - ✅ **Microsoft Login** - Full Xbox/Microsoft account support
-          - ✅ **CurseForge Integration** - Browse and download mods
-          - ✅ **Imgur Upload** - Screenshot sharing functionality
-          - ✅ **macOS Auto-Updates** - Sparkle integration
-
-          ## 📋 Build Information
+          # Get changelog from recent commits (last 20 commits to capture sync merges)
+          echo "📋 Generating changelog from recent commits..."
           
-          | | |
-          |---|---|
-          | **Build Date** | ${{ steps.version-info.outputs.date }} |
-          | **Commit** | [`${{ steps.version-info.outputs.version }}`](https://github.com/${{ github.repository }}/commit/${{ steps.version-info.outputs.full_hash }}) |
-          | **Branch** | ${{ github.ref_name }} |
-          | **API Keys Source** | [PrismLauncher/develop](https://github.com/PrismLauncher/PrismLauncher/blob/develop/CMakeLists.txt) |
+          # Look for merge commits from sync workflow
+          CHANGELOG=""
+          while IFS= read -r commit_line; do
+            if [[ "$commit_line" == *"Merge remote-tracking branch 'upstream/develop'"* ]] || [[ "$commit_line" == *"upstream"* ]]; then
+              # Extract just the hash for this merge commit
+              MERGE_HASH=$(echo "$commit_line" | awk '{print $1}')
+              
+              # Get the individual commits that were merged (excluding our own commits)
+              while IFS= read -r individual_commit; do
+                # Skip empty lines and our own modification commits
+                if [[ -n "$individual_commit" ]] && [[ "$individual_commit" != *"bypass"* ]] && [[ "$individual_commit" != *"Crism"* ]] && [[ "$individual_commit" != *"coffeegrind"* ]]; then
+                  HASH=$(echo "$individual_commit" | awk '{print $1}')
+                  MESSAGE=$(echo "$individual_commit" | cut -d' ' -f2-)
+                  
+                  # Format the changelog entry
+                  CHANGELOG="${CHANGELOG}- ${MESSAGE} ([${HASH:0:7}](https://github.com/PrismLauncher/PrismLauncher/commit/${HASH}))\n"
+                fi
+              done <<< "$(git log --oneline ${MERGE_HASH}^1..${MERGE_HASH}^2 2>/dev/null | head -10)"
+            fi
+          done <<< "$(git log --oneline -20)"
+          
+          # If no changelog entries found, add a default message
+          if [[ -z "$CHANGELOG" ]]; then
+            CHANGELOG="- Minor updates and improvements\n"
+          fi
+          
+          cat > RELEASE_BODY.md << EOF
+          🌈 Download from our official site at <https://prismlauncher.org/download>
 
-          ## 📥 Downloads
+          ## Changelog
 
-          Choose the appropriate package for your platform:
-
-          ### 🐧 Linux
-          - **Linux (x64)**: For most Linux distributions
-          - **Linux ARM64**: For ARM64-based Linux systems
-
-          ### 🪟 Windows  
-          - **Windows MinGW Portable**: Portable ZIP version
-          - **Windows MinGW Setup**: Installer executable
-          - **Windows ARM64**: For ARM64 Windows devices
-
-          ### 🍎 macOS
-          - **macOS**: Universal macOS package with auto-updater
-
-          ## 🔧 Installation
-
-          ### Linux
-          - **AppImage**: Download, make executable (`chmod +x`), and run
-          - **DEB Package**: Install with `sudo dpkg -i package.deb`
-          - **Portable**: Extract and run
-
-          ### Windows
-          - **Portable**: Extract ZIP and run `prismlauncher.exe`
-          - **Setup**: Run the installer executable
-
-          ### macOS  
-          - **ZIP**: Extract and move to Applications folder
-          - **DMG**: Open and drag to Applications folder
+          ### Added
+          - Automatic mod download bypass for blocked CurseForge/Flame mods
+          - Direct download support for ATLauncher browser-required mods
+          
+          ### Fixed
+          $(echo -e "$CHANGELOG")
 
           ---
 
-          *This release was automatically generated with API keys retrieved from upstream Prism Launcher*
+          *Based on Prism Launcher with mod download modifications*
           EOF
 
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.version-info.outputs.tag }}
-          name: "Prism Launcher ${{ steps.version-info.outputs.date }}"
+          name: "Crism Launcher ${{ steps.version-info.outputs.semantic_version }}"
           bodyFile: RELEASE_BODY.md
           artifacts: "release-assets/*"
           draft: false

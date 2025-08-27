@@ -49,20 +49,32 @@ jobs:
           # Get current commit for comparison
           OLD_COMMIT=$(git rev-parse HEAD)
           
-          # Merge upstream changes
-          git merge upstream/develop --no-edit
+          # Get upstream commits with detailed information for changelog
+          echo "📋 Upstream commits being merged:"
+          git log --oneline --pretty=format:"- %s ([%h](https://github.com/PrismLauncher/PrismLauncher/commit/%H))" ${OLD_COMMIT}..upstream/develop | head -20
+          
+          # Create a more descriptive merge commit message
+          COMMIT_COUNT=$(git rev-list --count ${OLD_COMMIT}..upstream/develop)
+          git merge upstream/develop -m "Merge ${COMMIT_COUNT} commits from upstream/develop
+
+          Synced from PrismLauncher/PrismLauncher develop branch.
+          
+          Changes include:
+          $(git log --oneline --pretty=format:"- %s (%h)" ${OLD_COMMIT}..upstream/develop | head -10)
+          
+          [skip ci]" || git merge upstream/develop --no-edit
           
           # Get new commit
           NEW_COMMIT=$(git rev-parse HEAD)
           
           # Show what changed
-          echo "📋 Changes being synced:"
+          echo "📋 Successfully merged changes:"
           git log --oneline ${OLD_COMMIT}..${NEW_COMMIT}
           
           # Push changes (this will trigger the build workflow)
           git push origin develop
           
-          echo "✅ Successfully synced with upstream"
+          echo "✅ Successfully synced ${COMMIT_COUNT} commits from upstream"
           echo "🚀 Build workflow should now be triggered automatically"
 
       - name: No changes to sync
