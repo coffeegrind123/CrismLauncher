@@ -182,10 +182,11 @@ jobs:
           CMAKE_PRESET: ${{ steps.cmake-preset.outputs.preset }}
           ARTIFACT_NAME: ${{ matrix.artifact-name }}-Qt6
           BUILD_PLATFORM: official
+          Launcher_UPDATER_GITHUB_REPO: "https://github.com/${{ github.repository }}"
         run: |
           echo "🏗️ Starting CMake build with upstream API keys..."
           echo "🔄 Using repository: ${{ github.repository }}"
-          cmake --workflow --preset "$CMAKE_PRESET" -DLauncher_UPDATER_GITHUB_REPO="https://github.com/${{ github.repository }}"
+          cmake --workflow --preset "$CMAKE_PRESET"
 
       ##
       # PACKAGE
