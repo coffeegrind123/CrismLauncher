@@ -4,6 +4,7 @@
 
 #include "FlameAPI.h"
 #include <algorithm>
+#include <QUrl>
 #include <optional>
 #include "BuildConfig.h"
 
@@ -31,6 +32,21 @@ std::pair<Task::Ptr, QByteArray*> FlameAPI::matchFingerprints(const QList<uint>&
     netJob->addNetAction(action);
 
     return { netJob, response };
+}
+
+// Files whose authors disabled third-party distribution come back from the API with a null
+// downloadUrl, but stay on the public CDN. The id is split into <id / 1000>/<id % 1000> with
+// no zero padding, e.g. 2277024 -> files/2277/24/<fileName>. The website's
+// <project>/download/<fileId> link is not an alternative: it is Cloudflare-gated HTML.
+QString FlameAPI::getCdnDownloadUrl(int fileId, const QString& fileName)
+{
+    if (fileId <= 0 || fileName.isEmpty()) {
+        return {};
+    }
+
+    const auto encodedName = QString::fromUtf8(QUrl::toPercentEncoding(fileName));
+    return QString("https://%1/files/%2/%3/%4")
+        .arg(BuildConfig.FLAME_DOWNLOAD_HOST, QString::number(fileId / 1000), QString::number(fileId % 1000), encodedName);
 }
 
 QString FlameAPI::getModFileChangelog(int modId, int fileId)

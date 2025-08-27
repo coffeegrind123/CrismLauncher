@@ -52,6 +52,7 @@
 #include "minecraft/PackProfile.h"
 #include "modplatform/ModIndex.h"
 #include "modplatform/atlauncher/ATLPackManifest.h"
+#include "modplatform/flame/FlameAPI.h"
 #include "net/ChecksumValidator.h"
 #include "settings/INISettingsObject.h"
 
@@ -74,6 +75,30 @@ bool isPathTraversal(const QString& basePath, const QString& entryName)
 Meta::Version::Ptr getComponentVersion(const QString& uid, const QString& version)
 {
     return APPLICATION->metadataIndex()->getLoadedVersion(uid, version);
+}
+
+// "Browser" mods point at a CurseForge page rather than the file, in every URL shape the site
+// has used, with the file id as the last numeric segment:
+//   minecraft.curseforge.com/projects/journeymap-32274/files/2269324
+//   www.curse.com/mc-mods/minecraft/233577-autorun/2275302
+//   www.curseforge.com/minecraft/mc-mods/journeymap/files/2367916[/download]
+// Returns the CDN URL for that file, or empty for anything else (e.g. OptiFine's ad page).
+QString resolveBrowserDownload(const ATLauncher::VersionMod& mod)
+{
+    const QUrl pageUrl(mod.url);
+    const auto host = pageUrl.host().toLower();
+    const auto isHost = [&host](const QString& domain) { return host == domain || host.endsWith("." + domain); };
+    if (!isHost("curseforge.com") && !isHost("curse.com")) {
+        return {};
+    }
+
+    static const QRegularExpression s_fileId("/(\\d+)(?:/download)?/?$");
+    const auto match = s_fileId.match(pageUrl.path());
+    if (!match.hasMatch()) {
+        return {};
+    }
+
+    return FlameAPI::getCdnDownloadUrl(match.captured(1).toInt(), mod.file);
 }
 }  // namespace
 
@@ -746,8 +771,13 @@ void PackInstallTask::downloadMods()
                 url = BuildConfig.ATL_DOWNLOAD_SERVER_URL + mod.url;
                 break;
             case DownloadType::Browser: {
-                blockedMods.append(mod);
-                continue;
+                url = resolveBrowserDownload(mod);
+                if (url.isEmpty()) {
+                    blockedMods.append(mod);
+                    continue;
+                }
+                qDebug() << "Resolved browser download for" << mod.name << "from" << mod.url << "to" << url;
+                break;
             }
             case DownloadType::Direct:
                 url = mod.url;

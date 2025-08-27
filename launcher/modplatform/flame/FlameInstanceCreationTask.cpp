@@ -568,8 +568,9 @@ void FlameCreationTask::idResolverSucceeded()
             m_otherResources.append(std::make_pair(result.version.fileName, result.targetFolder));
         }
 
-        // skip optional mods that were not selected
-        if (result.version.downloadUrl.isEmpty()) {
+        // Distribution-blocked files are fetched from the CDN directly (see setupDownloadJob);
+        // only ask the user for the ones that can't be addressed there
+        if (result.version.downloadUrl.isEmpty() && FlameAPI::getCdnDownloadUrl(result.fileId, result.version.fileName).isEmpty()) {
             BlockedMod blockedMod;
             blockedMod.name = result.version.fileName;
             blockedMod.websiteUrl = QString("%1/download/%2").arg(result.pack.websiteUrl, QString::number(result.fileId));
@@ -628,9 +629,15 @@ void FlameCreationTask::setupDownloadJob()
         relpath = FS::PathCombine(m_rootPath, relpath);
         auto path = FS::PathCombine(m_stagingPath, relpath);
 
-        if (!result.version.downloadUrl.isEmpty()) {
-            qDebug() << "Will download" << result.version.downloadUrl << "to" << path;
-            auto dl = Net::ApiRequest::makeFile(result.version.downloadUrl, path);
+        auto url = result.version.downloadUrl;
+        if (url.isEmpty()) {
+            url = FlameAPI::getCdnDownloadUrl(result.fileId, result.version.fileName);
+            qDebug() << "No API download URL for" << result.version.fileName << "- using CDN URL" << url;
+        }
+
+        if (!url.isEmpty()) {
+            qDebug() << "Will download" << url << "to" << path;
+            auto dl = Net::ApiRequest::makeFile(url, path);
             m_filesJob->addNetAction(dl);
         }
     }

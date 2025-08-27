@@ -45,6 +45,7 @@
 #include "minecraft/MinecraftInstance.h"
 #include "minecraft/PackProfile.h"
 #include "modplatform/flame/FileResolvingTask.h"
+#include "modplatform/flame/FlameAPI.h"
 #include "modplatform/flame/PackManifest.h"
 #include "net/ChecksumValidator.h"
 #include "settings/INISettingsObject.h"
@@ -185,8 +186,15 @@ void PackInstallTask::onResolveModsSucceeded()
         const Flame::File resultsFile = results.files.value(fileId);
         VersionFile& localFile = m_version.files[index];
 
-        // First check for blocked mods
-        if (resultsFile.version.downloadUrl.isEmpty()) {
+        // Distribution-blocked files are fetched from the CDN directly; only ask the user for the
+        // ones that can't be addressed there
+        auto url = resultsFile.version.downloadUrl;
+        if (url.isEmpty()) {
+            url = FlameAPI::getCdnDownloadUrl(resultsFile.fileId, resultsFile.version.fileName);
+            qDebug() << "No API download URL for" << resultsFile.version.fileName << "- using CDN URL" << url;
+        }
+
+        if (url.isEmpty()) {
             BlockedMod blockedMod;
             blockedMod.name = resultsFile.version.fileName;
             blockedMod.websiteUrl = QString("%1/download/%2").arg(resultsFile.pack.websiteUrl, QString::number(resultsFile.fileId));
@@ -199,7 +207,7 @@ void PackInstallTask::onResolveModsSucceeded()
 
             anyBlocked = true;
         } else {
-            localFile.url = resultsFile.version.downloadUrl;
+            localFile.url = url;
         }
     }
 
