@@ -184,7 +184,8 @@ jobs:
           BUILD_PLATFORM: official
         run: |
           echo "🏗️ Starting CMake build with upstream API keys..."
-          cmake --workflow --preset "$CMAKE_PRESET"
+          echo "🔄 Using repository: ${{ github.repository }}"
+          cmake --workflow --preset "$CMAKE_PRESET" -DLauncher_UPDATER_GITHUB_REPO="https://github.com/${{ github.repository }}"
 
       ##
       # PACKAGE
@@ -675,16 +676,20 @@ jobs:
           
           # Start README generation
           cat > README.md << 'HEADER'
-          # Prism Launcher Fork with Dynamic API Keys
+          # Crism Launcher
 
-          [![Build Status](https://github.com/${{ github.repository }}/actions/workflows/build.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/build.yml)
+          [![Build Status](https://github.com/${{ github.repository }}/actions/workflows/ci.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/ci.yml)
           [![Latest Release](https://img.shields.io/github/v/release/${{ github.repository }})](https://github.com/${{ github.repository }}/releases/latest)
 
-          This fork automatically retrieves API keys from the upstream [PrismLauncher repository](https://github.com/PrismLauncher/PrismLauncher) during build, ensuring full compatibility with Microsoft login, CurseForge, and Imgur features.
+          A Prism Launcher fork with modified mod downloading behavior to bypass blocked mod restrictions.
 
-          ## Download
+          ## Changes from Upstream
 
-          **[Latest Release](https://github.com/${{ github.repository }}/releases/latest)** | **[All Releases](https://github.com/${{ github.repository }}/releases)**
+          **Mod Download Modifications:**
+          - Bypasses "blocked mods" dialog for CurseForge/Flame modpacks
+          - Automatically generates download URLs for mods that lack official third-party download links
+          - Treats ATLauncher browser-required downloads as direct downloads
+          - Allows automatic installation of previously restricted mods
 
           ### Available Builds
 
@@ -983,53 +988,8 @@ jobs:
           # Clean up temporary file
           rm -f assets_list.txt
 
-          # Add footer sections
+          # Add footer
           cat >> README.md << 'FOOTER'
-
-          ## How it Works
-
-          This fork automatically:
-          1. Downloads the latest CMakeLists.txt from [PrismLauncher/develop](https://github.com/PrismLauncher/PrismLauncher/blob/develop/CMakeLists.txt)
-          2. Replaces the local CMakeLists.txt with the upstream version (including all API keys)
-          3. Builds with full API integration
-          4. Creates releases with direct download links
-
-          ## Installation
-
-          ### Linux
-          - **Portable**: Extract tar.gz and run the executable
-          - **AppImage**: Make executable and run: `chmod +x *.AppImage && ./PrismLauncher*.AppImage`
-
-          ### Windows
-          - **Portable**: Extract ZIP and run `prismlauncher.exe`
-          - **Setup**: Run the installer executable
-
-          ### macOS
-          - **ZIP**: Extract and move to Applications folder
-          - **DMG**: Open and drag to Applications folder
-
-          ## Features
-
-          All standard Prism Launcher features are included:
-          - Microsoft/Xbox account login
-          - CurseForge mod browsing and installation
-          - Imgur screenshot uploading
-          - Multiple instance management
-          - Mod management and installation
-
-          ## API Keys
-
-          This build uses the official API keys from upstream Prism Launcher:
-          - **Microsoft MSA Client ID** - Xbox/Microsoft authentication
-          - **CurseForge API Key** - Mod browsing and downloads
-          - **Imgur Client ID** - Screenshot uploads
-          - **Sparkle Public Key** - macOS auto-updates
-
-          ## Links
-
-          - [Upstream Prism Launcher](https://github.com/PrismLauncher/PrismLauncher)
-          - [Report Issues](https://github.com/${{ github.repository }}/issues)
-          - [Build Workflow](https://github.com/${{ github.repository }}/actions)
 
           ---
 
@@ -1067,19 +1027,20 @@ jobs:
 
       - name: Summary
         run: |
-          echo "🎉 === WORKFLOW COMPLETED SUCCESSFULLY === 🎉"
+          echo "🎉 === CRISM LAUNCHER BUILD COMPLETED === 🎉"
           echo ""
           echo "📋 Summary:"
           echo "  • Built for all platforms ✅"
           echo "  • Retrieved API keys from upstream ✅"
-          echo "  • Replaced CMakeLists.txt with upstream version ✅"
+          echo "  • Applied mod download bypass modifications ✅"
           echo "  • Created GitHub Release with direct downloads ✅"
           echo "  • Updated README.md with release links ✅"
           echo ""
-          echo "🔑 API Key Integration:"
-          echo "  • Source: https://github.com/PrismLauncher/PrismLauncher/blob/develop/CMakeLists.txt"
-          echo "  • Method: Complete file replacement with upstream"
-          echo "  • Status: Functional with all Prism Launcher features"
+          echo "🚀 Crism Launcher Features:"
+          echo "  • Bypasses blocked mod restrictions"
+          echo "  • Automatic mod downloads for CurseForge/Flame packs"
+          echo "  • Direct ATLauncher mod downloads"
+          echo "  • Full Prism Launcher compatibility"
           echo ""
           echo "📥 Download Links:"
           echo "  • Direct release downloads: https://github.com/${{ github.repository }}/releases/latest"
