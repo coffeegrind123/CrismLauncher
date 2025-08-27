@@ -733,8 +733,10 @@ void PackInstallTask::downloadMods()
                 url = BuildConfig.ATL_DOWNLOAD_SERVER_URL + mod.url;
                 break;
             case DownloadType::Browser: {
-                blocked_mods.append(mod);
-                continue;
+                // MODIFICATION: Treat browser downloads as direct downloads to bypass blocking
+                qDebug() << "Converting browser download to direct download for mod:" << mod.name;
+                url = mod.url;
+                break;
             }
             case DownloadType::Direct:
                 url = mod.url;

@@ -521,23 +521,14 @@ void FlameCreationTask::idResolverSucceeded(QEventLoop& loop)
             m_otherResources.append(std::make_pair(result.version.fileName, result.targetFolder));
         }
 
-        // skip optional mods that were not selected
+        // MODIFICATION: Generate download URL for mods that lack one
         if (result.version.downloadUrl.isEmpty()) {
-            BlockedMod blocked_mod;
-            blocked_mod.name = result.version.fileName;
-            blocked_mod.websiteUrl = QString("%1/download/%2").arg(result.pack.websiteUrl, QString::number(result.fileId));
-            blocked_mod.hash = result.version.hash;
-            blocked_mod.matched = false;
-            blocked_mod.localPath = "";
-            blocked_mod.targetFolder = result.targetFolder;
-            auto fileName = result.version.fileName;
-            fileName = FS::RemoveInvalidPathChars(fileName);
-            auto relpath = FS::PathCombine(result.targetFolder, fileName);
-            blocked_mod.disabled = !result.required && !m_selectedOptionalMods.contains(relpath);
-
-            blocked_mods.append(blocked_mod);
-
-            anyBlocked = true;
+            // Construct direct download URL from website URL and file ID
+            QString constructedUrl = QString("%1/download/%2").arg(result.pack.websiteUrl, QString::number(result.fileId));
+            qDebug() << "Generated fallback download URL for" << result.version.fileName << ":" << constructedUrl;
+            
+            // Modify the result to include the constructed download URL
+            const_cast<ModPlatform::IndexedVersion&>(result.version).downloadUrl = constructedUrl;
         }
     }
     if (anyBlocked) {
