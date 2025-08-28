@@ -279,23 +279,25 @@ jobs:
               fi
               ;;
             "Windows-MinGW-w64")
-              # Copy all Windows artifacts with proper naming
-              if ls *Portable*.zip 1> /dev/null 2>&1; then
-                for file in *Portable*.zip; do
+              # Look for Windows artifacts with and without extensions
+              if ls *Portable* 1> /dev/null 2>&1; then
+                for file in *Portable*; do
+                  # Add .zip extension if it doesn't exist
                   cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-w64-Portable-${{ steps.version-info.outputs.version }}.zip"
                   echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-w64-Portable-${{ steps.version-info.outputs.version }}.zip"
                 done
               fi
-              if ls *Setup*.exe 1> /dev/null 2>&1; then
-                for file in *Setup*.exe; do
+              if ls *Setup* 1> /dev/null 2>&1; then
+                for file in *Setup*; do
+                  # Add .exe extension if it doesn't exist
                   cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-w64-Setup-${{ steps.version-info.outputs.version }}.exe"
                   echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-w64-Setup-${{ steps.version-info.outputs.version }}.exe"
                 done
               fi
-              # Also copy main zip if it exists
-              if ls PrismLauncher-Windows-*.zip 1> /dev/null 2>&1; then
-                for file in PrismLauncher-Windows-*.zip; do
-                  if [[ ! "$file" =~ Portable ]]; then
+              # Look for main Windows zip (the third artifact)
+              if ls PrismLauncher-Windows-MinGW-w64-* 1> /dev/null 2>&1; then
+                for file in PrismLauncher-Windows-MinGW-w64-*; do
+                  if [[ ! "$file" =~ Portable ]] && [[ ! "$file" =~ Setup ]]; then
                     cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-w64-${{ steps.version-info.outputs.version }}.zip"
                     echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-w64-${{ steps.version-info.outputs.version }}.zip"
                   fi
