@@ -724,9 +724,9 @@ jobs:
                   "Linux")
                     echo "    → Processing Linux platform"
                     DISPLAY_NAME="Linux (Qt6)"
-                    # Look for tar.gz, AppImage, and deb files
+                    # Look for tar.gz, AppImage, and deb files - be specific about x86_64
                     TARBALL=$(grep "PrismLauncher-Linux-Qt6.*\.tar\.gz" assets_list.txt 2>/dev/null | head -1)
-                    APPIMAGE=$(grep "PrismLauncher-Linux.*\.AppImage" assets_list.txt 2>/dev/null | head -1)
+                    APPIMAGE=$(grep "PrismLauncher-Linux-x86_64.*\.AppImage" assets_list.txt 2>/dev/null | head -1)
                     DEB=$(grep "PrismLauncher-Linux.*\.deb" assets_list.txt 2>/dev/null | head -1)
                     
                     echo "    → Found: TARBALL='$TARBALL', APPIMAGE='$APPIMAGE', DEB='$DEB'"
@@ -768,7 +768,7 @@ jobs:
                   "Linux-aarch64")
                     echo "    → Processing Linux ARM64 platform"
                     DISPLAY_NAME="Linux ARM64 (Qt6)"  
-                    # Look for tar.gz and AppImage files
+                    # Look for tar.gz and AppImage files - be specific about aarch64
                     TARBALL=$(grep "PrismLauncher-Linux-Qt6-arm64.*\.tar\.gz" assets_list.txt 2>/dev/null | head -1)
                     APPIMAGE=$(grep "PrismLauncher-Linux-aarch64.*\.AppImage" assets_list.txt 2>/dev/null | head -1)
                     
@@ -799,88 +799,62 @@ jobs:
                   "Windows-MinGW-w64")
                     echo "    → Processing Windows x64 platform"
                     DISPLAY_NAME="Windows MinGW x64"
-                    # Look for portable zip, setup exe, and main zip
-                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-w64-Portable.*\.zip" assets_list.txt 2>/dev/null | head -1)
+                    # Look for setup exe and portable zip only
                     SETUP_EXE=$(grep "PrismLauncher-Windows-MinGW-w64-Setup.*\.exe" assets_list.txt 2>/dev/null | head -1)
-                    MAIN_ZIP=$(grep "PrismLauncher-Windows-MinGW-w64-[^P][^o].*\.zip" assets_list.txt 2>/dev/null | head -1)
+                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-w64-Portable.*\.zip" assets_list.txt 2>/dev/null | head -1)
                     
-                    echo "    → Found: PORTABLE='$PORTABLE_ZIP', SETUP='$SETUP_EXE', MAIN='$MAIN_ZIP'"
+                    echo "    → Found: SETUP='$SETUP_EXE', PORTABLE='$PORTABLE_ZIP'"
                     
                     DOWNLOAD_LINKS=""
-                    if [ -n "$PORTABLE_ZIP" ]; then
-                      FILENAME=$(echo "$PORTABLE_ZIP" | cut -d'|' -f1 2>/dev/null)
-                      URL=$(echo "$PORTABLE_ZIP" | cut -d'|' -f2 2>/dev/null)
-                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
-                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
-                        echo "    → Added portable link: $FILENAME"
-                      fi
-                    fi
                     if [ -n "$SETUP_EXE" ]; then
                       FILENAME=$(echo "$SETUP_EXE" | cut -d'|' -f1 2>/dev/null)
                       URL=$(echo "$SETUP_EXE" | cut -d'|' -f2 2>/dev/null)
                       if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
-                        if [ -n "$DOWNLOAD_LINKS" ]; then
-                          DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
-                        else
-                          DOWNLOAD_LINKS="[$FILENAME]($URL)"
-                        fi
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
                         echo "    → Added setup link: $FILENAME"
                       fi
                     fi
-                    if [ -n "$MAIN_ZIP" ]; then
-                      FILENAME=$(echo "$MAIN_ZIP" | cut -d'|' -f1 2>/dev/null)
-                      URL=$(echo "$MAIN_ZIP" | cut -d'|' -f2 2>/dev/null)
+                    if [ -n "$PORTABLE_ZIP" ]; then
+                      FILENAME=$(echo "$PORTABLE_ZIP" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$PORTABLE_ZIP" | cut -d'|' -f2 2>/dev/null)
                       if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
                         if [ -n "$DOWNLOAD_LINKS" ]; then
                           DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
                         else
                           DOWNLOAD_LINKS="[$FILENAME]($URL)"
                         fi
-                        echo "    → Added main link: $FILENAME"
+                        echo "    → Added portable link: $FILENAME"
                       fi
                     fi
                     ;;
                   "Windows-MinGW-arm64")
                     echo "    → Processing Windows ARM64 platform"
                     DISPLAY_NAME="Windows MinGW ARM64"
-                    # Look for portable zip, setup exe, and main zip
-                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-arm64-Portable.*\.zip" assets_list.txt 2>/dev/null | head -1)
+                    # Look for setup exe and portable zip only
                     SETUP_EXE=$(grep "PrismLauncher-Windows-MinGW-arm64-Setup.*\.exe" assets_list.txt 2>/dev/null | head -1)
-                    MAIN_ZIP=$(grep "PrismLauncher-Windows-MinGW-arm64-[^P][^o].*\.zip" assets_list.txt 2>/dev/null | head -1)
+                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-arm64-Portable.*\.zip" assets_list.txt 2>/dev/null | head -1)
                     
-                    echo "    → Found: PORTABLE='$PORTABLE_ZIP', SETUP='$SETUP_EXE', MAIN='$MAIN_ZIP'"
+                    echo "    → Found: SETUP='$SETUP_EXE', PORTABLE='$PORTABLE_ZIP'"
                     
                     DOWNLOAD_LINKS=""
-                    if [ -n "$PORTABLE_ZIP" ]; then
-                      FILENAME=$(echo "$PORTABLE_ZIP" | cut -d'|' -f1 2>/dev/null)
-                      URL=$(echo "$PORTABLE_ZIP" | cut -d'|' -f2 2>/dev/null)
-                      if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
-                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
-                        echo "    → Added portable link: $FILENAME"
-                      fi
-                    fi
                     if [ -n "$SETUP_EXE" ]; then
                       FILENAME=$(echo "$SETUP_EXE" | cut -d'|' -f1 2>/dev/null)
                       URL=$(echo "$SETUP_EXE" | cut -d'|' -f2 2>/dev/null)
                       if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
-                        if [ -n "$DOWNLOAD_LINKS" ]; then
-                          DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
-                        else
-                          DOWNLOAD_LINKS="[$FILENAME]($URL)"
-                        fi
+                        DOWNLOAD_LINKS="[$FILENAME]($URL)"
                         echo "    → Added setup link: $FILENAME"
                       fi
                     fi
-                    if [ -n "$MAIN_ZIP" ]; then
-                      FILENAME=$(echo "$MAIN_ZIP" | cut -d'|' -f1 2>/dev/null)
-                      URL=$(echo "$MAIN_ZIP" | cut -d'|' -f2 2>/dev/null)
+                    if [ -n "$PORTABLE_ZIP" ]; then
+                      FILENAME=$(echo "$PORTABLE_ZIP" | cut -d'|' -f1 2>/dev/null)
+                      URL=$(echo "$PORTABLE_ZIP" | cut -d'|' -f2 2>/dev/null)
                       if [ -n "$FILENAME" ] && [ -n "$URL" ]; then
                         if [ -n "$DOWNLOAD_LINKS" ]; then
                           DOWNLOAD_LINKS="$DOWNLOAD_LINKS<br/>[$FILENAME]($URL)"
                         else
                           DOWNLOAD_LINKS="[$FILENAME]($URL)"
                         fi
-                        echo "    → Added main link: $FILENAME"
+                        echo "    → Added portable link: $FILENAME"
                       fi
                     fi
                     ;;
