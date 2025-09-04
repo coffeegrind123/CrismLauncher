@@ -4,54 +4,7 @@ on:
   push:
     branches:
       - "develop"
-      - "release-*"
-    paths:
-      # File types
-      - "**.cpp"
-      - "**.h"
-      - "**.java"
-      - "**.ui"
-
-      # Directories
-      - "buildconfig/**"
-      - "cmake/**"
-      - "launcher/**"
-      - "libraries/**"
-      - "program_info/**"
-      - "tests/**"
-
-      # Files
-      - "CMakeLists.txt"
-      - "COPYING.md"
-
-      # Workflows
-      - ".github/workflows/build.yml"
-      - ".github/actions/package/**"
-      - ".github/actions/setup-dependencies/**"
   pull_request:
-    paths:
-      # File types
-      - "**.cpp"
-      - "**.h"
-      - "**.java"
-      - "**.ui"
-
-      # Directories
-      - "buildconfig/**"
-      - "cmake/**"
-      - "launcher/**"
-      - "libraries/**"
-      - "program_info/**"
-      - "tests/**"
-
-      # Files
-      - "CMakeLists.txt"
-      - "COPYING.md"
-
-      # Workflows
-      - ".github/workflows/build.yml"
-      - ".github/actions/package/**"
-      - ".github/actions/setup-dependencies/**"
   workflow_call:
     inputs:
       build-type:
