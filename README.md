@@ -17,12 +17,12 @@ A Prism Launcher fork with modified mod downloading behavior to bypass blocked m
 
 | Platform | Download |
 |----------|----------|
-| **Linux ARM64 (Qt6)** | [PrismLauncher-Linux-Qt6-arm64-7c6a89a.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250919-7c6a89a/PrismLauncher-Linux-Qt6-arm64-7c6a89a.tar.gz)<br/>[PrismLauncher-Linux-aarch64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250919-7c6a89a/PrismLauncher-Linux-aarch64.AppImage) |
-| **Linux (Qt6)** | [PrismLauncher-Linux-Qt6-7c6a89a.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250919-7c6a89a/PrismLauncher-Linux-Qt6-7c6a89a.tar.gz)<br/>[PrismLauncher-Linux-x86_64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250919-7c6a89a/PrismLauncher-Linux-x86_64.AppImage) |
-| **Windows MinGW ARM64** | [PrismLauncher-Windows-MinGW-arm64-Setup-7c6a89a.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250919-7c6a89a/PrismLauncher-Windows-MinGW-arm64-Setup-7c6a89a.exe) |
-| **Windows MinGW x64** | [PrismLauncher-Windows-MinGW-w64-Setup-7c6a89a.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250919-7c6a89a/PrismLauncher-Windows-MinGW-w64-Setup-7c6a89a.exe) |
-| **macOS** | [PrismLauncher-macOS-7c6a89a.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250919-7c6a89a/PrismLauncher-macOS-7c6a89a.zip) |
+| **Linux ARM64 (Qt6)** | [PrismLauncher-Linux-Qt6-arm64-6128de9.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250922-6128de9/PrismLauncher-Linux-Qt6-arm64-6128de9.tar.gz)<br/>[PrismLauncher-Linux-aarch64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250922-6128de9/PrismLauncher-Linux-aarch64.AppImage) |
+| **Linux (Qt6)** | [PrismLauncher-Linux-Qt6-6128de9.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250922-6128de9/PrismLauncher-Linux-Qt6-6128de9.tar.gz)<br/>[PrismLauncher-Linux-x86_64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250922-6128de9/PrismLauncher-Linux-x86_64.AppImage) |
+| **Windows MinGW ARM64** | [PrismLauncher-Windows-MinGW-arm64-Setup-6128de9.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250922-6128de9/PrismLauncher-Windows-MinGW-arm64-Setup-6128de9.exe) |
+| **Windows MinGW x64** | [PrismLauncher-Windows-MinGW-w64-Setup-6128de9.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250922-6128de9/PrismLauncher-Windows-MinGW-w64-Setup-6128de9.exe) |
+| **macOS** | [PrismLauncher-macOS-6128de9.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/v20250922-6128de9/PrismLauncher-macOS-6128de9.zip) |
 
 ---
 
-*Last updated: 2025-09-19 18:13 UTC*
+*Last updated: 2025-09-22 07:05 UTC*
