@@ -19,6 +19,9 @@ A Prism Launcher fork that installs blocked mods automatically, plays without a 
 **Download mirror**
 - Optional (Settings → Services): fetch Minecraft, libraries, assets, Java, Forge and NeoForge from BMCLAPI or a compatible mirror, falling back to the official servers on any failure. Mirrored files are verified against the official checksums
 
+**Updates**
+- The built-in updater (Sparkle on macOS) follows this fork's releases, not upstream Prism's
+
 ### Latest Builds
 
 | Platform | Download |
