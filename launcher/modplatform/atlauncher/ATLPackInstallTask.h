@@ -113,6 +113,8 @@ class PackInstallTask : public InstanceTask {
     void installConfigs();
     void extractConfigs();
     void downloadMods();
+    void resolveBrowserDownloads();
+    void queueModDownloads();
     bool extractMods(const QMap<QString, VersionMod>& toExtract,
                      const QMap<QString, VersionMod>& toDecomp,
                      const QMap<QString, QString>& toCopy);
@@ -134,6 +136,10 @@ class PackInstallTask : public InstanceTask {
     QMap<QString, VersionMod> m_modsToExtract;
     QMap<QString, VersionMod> m_modsToDecomp;
     QMap<QString, QString> m_modsToCopy;
+
+    QStringList m_selectedMods;
+    // mod.file -> download URL for "browser" mods that need a network lookup to resolve
+    QHash<QString, QString> m_resolvedBrowserUrls;
 
     QString m_archivePath;
     QStringList m_jarmods;

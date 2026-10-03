@@ -53,6 +53,7 @@
 #include "modplatform/ModIndex.h"
 #include "modplatform/atlauncher/ATLPackManifest.h"
 #include "modplatform/flame/FlameAPI.h"
+#include "modplatform/helpers/OptiFineUtils.h"
 #include "net/ChecksumValidator.h"
 #include "settings/INISettingsObject.h"
 
@@ -82,10 +83,16 @@ Meta::Version::Ptr getComponentVersion(const QString& uid, const QString& versio
 //   minecraft.curseforge.com/projects/journeymap-32274/files/2269324
 //   www.curse.com/mc-mods/minecraft/233577-autorun/2275302
 //   www.curseforge.com/minecraft/mc-mods/journeymap/files/2367916[/download]
-// Returns the CDN URL for that file, or empty for anything else (e.g. OptiFine's ad page).
+// Returns the CDN URL for that file. Some packs also mark files on ATLauncher's own server as
+// "browser" (relative paths like packs/<pack>/files/<file>), which are served from there.
+// Returns empty for anything else; OptiFine is resolved separately (resolveBrowserDownloads).
 QString resolveBrowserDownload(const ATLauncher::VersionMod& mod)
 {
     const QUrl pageUrl(mod.url);
+    if (pageUrl.isRelative() && !mod.url.isEmpty()) {
+        return BuildConfig.ATL_DOWNLOAD_SERVER_URL + mod.url;
+    }
+
     const auto host = pageUrl.host().toLower();
     const auto isHost = [&host](const QString& domain) { return host == domain || host.endsWith("." + domain); };
     if (!isHost("curseforge.com") && !isHost("curse.com")) {
@@ -748,6 +755,72 @@ void PackInstallTask::downloadMods()
         selectedMods = mods.value();
     }
 
+    m_selectedMods = selectedMods;
+    resolveBrowserDownloads();
+}
+
+void PackInstallTask::resolveBrowserDownloads()
+{
+    m_resolvedBrowserUrls.clear();
+
+    QStringList optiFineFiles;
+    for (const auto& mod : m_version.mods) {
+        if (!mod.client || (mod.optional && !m_selectedMods.contains(mod.name))) {
+            continue;
+        }
+        if (mod.download != DownloadType::Browser || !resolveBrowserDownload(mod).isEmpty()) {
+            continue;
+        }
+        if (OptiFine::isOptiFineFile(mod.file) && !optiFineFiles.contains(mod.file)) {
+            optiFineFiles.append(mod.file);
+        }
+    }
+
+    if (optiFineFiles.isEmpty()) {
+        queueModDownloads();
+        return;
+    }
+
+    setStatus(tr("Resolving OptiFine downloads..."));
+
+    NetJob::Ptr job{ new NetJob(tr("OptiFine download pages"), APPLICATION->network()) };
+    QList<std::pair<QString, QByteArray*>> pages;
+    for (const auto& file : optiFineFiles) {
+        auto [action, response] = Net::Request::makeByteArray(QUrl(OptiFine::downloadPageUrl(file)));
+        job->addNetAction(action);
+        pages.append({ file, response });
+    }
+
+    // Success or failure, each file gets a URL: one whose page didn't load or parse falls back to the
+    // mirror, and the md5 from the pack manifest still validates whichever source serves it.
+    auto onPagesFetched = [this, pages] {
+        m_abortable = false;
+        for (const auto& [file, response] : pages) {
+            auto url = OptiFine::parseDownloadPage(*response);
+            if (url.isEmpty()) {
+                url = OptiFine::mirrorUrl(file);
+                qWarning() << "No download link on the OptiFine page for" << file << "(" << response->size()
+                           << "bytes ), falling back to mirror" << url;
+            } else {
+                qDebug() << "Resolved OptiFine download for" << file << "to" << url;
+            }
+            m_resolvedBrowserUrls.insert(file, url);
+        }
+
+        // Deferred: queueModDownloads() replaces m_jobPtr, which is the job emitting this signal
+        QMetaObject::invokeMethod(this, &PackInstallTask::queueModDownloads, Qt::QueuedConnection);
+    };
+    connect(job.get(), &NetJob::succeeded, this, onPagesFetched);
+    connect(job.get(), &NetJob::failed, this, onPagesFetched);
+    connect(job.get(), &NetJob::aborted, this, &PackInstallTask::onDownloadAborted);
+
+    m_jobPtr = job;
+    m_abortable = true;
+    m_jobPtr->start();
+}
+
+void PackInstallTask::queueModDownloads()
+{
     setStatus(tr("Downloading mods..."));
 
     m_jarmods.clear();
@@ -761,7 +834,7 @@ void PackInstallTask::downloadMods()
         }
 
         // skip optional mods that were not selected
-        if (mod.optional && !selectedMods.contains(mod.name)) {
+        if (mod.optional && !m_selectedMods.contains(mod.name)) {
             continue;
         }
 
@@ -772,6 +845,9 @@ void PackInstallTask::downloadMods()
                 break;
             case DownloadType::Browser: {
                 url = resolveBrowserDownload(mod);
+                if (url.isEmpty()) {
+                    url = m_resolvedBrowserUrls.value(mod.file);
+                }
                 if (url.isEmpty()) {
                     blockedMods.append(mod);
                     continue;
