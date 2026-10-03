@@ -197,6 +197,37 @@
         </widget>
        </item>
        <item>
+        <widget class="QGroupBox" name="groupBox_downloadMirror">
+         <property name="title">
+          <string>Download Mirror</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_downloadMirror">
+          <item>
+           <widget class="QLabel" name="downloadMirrorNote">
+            <property name="text">
+             <string>Download Minecraft, its libraries and assets, Java, Forge and NeoForge from a mirror, which can be much faster in some regions. Files are still checked against the official checksums, and files without one always come from the official servers. Uses &lt;a href=&quot;https://bmclapidoc.bangbang93.com/&quot;&gt;BMCLAPI&lt;/a&gt; by bangbang93 unless another server with the same layout is set below.</string>
+            </property>
+            <property name="textFormat">
+             <enum>Qt::RichText</enum>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+            <property name="openExternalLinks">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="downloadMirrorMode"/>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="downloadMirrorURL"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QGroupBox" name="groupBox_ua">
          <property name="minimumSize">
           <size>

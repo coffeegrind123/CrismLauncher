@@ -144,13 +144,22 @@ class Request : public Task {
     void enableAutoRetry(bool enable);
 
     QUrl url() const;
-    void setUrl(QUrl url) { m_url = std::move(url); }
+    void setUrl(QUrl url)
+    {
+        m_originalUrl = url;
+        m_url = std::move(url);
+    }
     int replyStatusCode() const;
     QNetworkReply::NetworkError error() const;
     QString errorString() const;
 
    private:
     auto handleRedirect() -> bool;
+    //! Sends the request to m_url as it stands (executeTask() first decides which URL to use)
+    void sendRequest();
+    //! Retries the original URL after a failure on the download mirror; false if that doesn't apply
+    bool tryMirrorFallback(const QString& reason);
+    bool mayFallBackFromMirror() const;
     void handleAutoRetry(int64_t delay);
     virtual QNetworkReply* getReply(QNetworkRequest&);
 
@@ -183,8 +192,14 @@ class Request : public Task {
     std::unique_ptr<QNetworkReply> m_reply;
     QByteArray m_errorResponse;
 
-    /// source URL
+    /// source URL, and the URL as requested before any mirror or redirect replaced it
     QUrl m_url;
+    QUrl m_originalUrl;
+
+    // m_onMirror: the current attempt goes to the download mirror. m_mirrorFailed: the mirror
+    // failed this request once, so retries go straight to the original URL
+    bool m_onMirror = false;
+    bool m_mirrorFailed = false;
     std::vector<std::unique_ptr<Net::HeaderProxy>> m_headerProxies;
 
     int m_retryCount = 0;

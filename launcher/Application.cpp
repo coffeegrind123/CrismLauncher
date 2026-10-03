@@ -898,6 +898,13 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
 
             // Legacy FML libs URL
             resetIfInvalid(m_settings->registerSetting("LegacyFMLLibsURLOverride", "").get());
+
+            // Download mirror for game files (see net/DownloadMirror.h); empty URL = BMCLAPI
+            resetIfInvalid(m_settings->registerSetting("DownloadMirrorURL", "").get());
+            auto mirrorMode = m_settings->registerSetting("DownloadMirrorMode", 0);
+            if (const auto mode = mirrorMode->get().toInt(); mode < 0 || mode > 2) {
+                m_settings->reset(mirrorMode->id());
+            }
         }
 
         m_settings->registerSetting("MetaRefreshOnLaunch", true);
