@@ -25,3 +25,12 @@ Net::Request::Ptr makeSkinDeleteRequest(const QString& token);
 Net::Request::Ptr makeSkinUploadRequest(const QString& token, const QString& path, const QString& variant);
 
 Net::Request::Ptr makeCapeChangeRequest(const QString& token, const QString& capeId);
+
+// Yggdrasil servers (authlib-injector): textures live under <API root>/api/user/profile/<uuid>/<type>
+Net::Request::Ptr makeYggdrasilSkinUploadRequest(const QString& apiRoot,
+                                                 const QString& token,
+                                                 const QString& uuid,
+                                                 const QString& path,
+                                                 const QString& variant);
+
+Net::Request::Ptr makeYggdrasilSkinDeleteRequest(const QString& apiRoot, const QString& token, const QString& uuid);

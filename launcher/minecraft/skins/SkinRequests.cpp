@@ -90,3 +90,65 @@ Net::Request::Ptr makeCapeChangeRequest(const QString& token, const QString& cap
     }));
     return req;
 }
+
+namespace {
+QUrl yggdrasilSkinUrl(const QString& apiRoot, const QString& uuid)
+{
+    return QUrl(QString("%1/api/user/profile/%2/skin").arg(apiRoot, uuid));
+}
+
+std::unique_ptr<Net::RawHeaderProxy> bearer(const QString& token)
+{
+    return std::make_unique<Net::RawHeaderProxy>(QList<Net::HeaderPair>{
+        { .headerName = "Authorization", .headerValue = QString("Bearer %1").arg(token).toLocal8Bit() },
+    });
+}
+}  // namespace
+
+Net::Request::Ptr makeYggdrasilSkinUploadRequest(const QString& apiRoot,
+                                                 const QString& token,
+                                                 const QString& uuid,
+                                                 const QString& path,
+                                                 const QString& variant)
+{
+    // The texture upload API names the slim model "slim" and the classic one with an empty string
+    const auto model = variant.compare("SLIM", Qt::CaseInsensitive) == 0 ? QByteArray("slim") : QByteArray();
+
+    auto getPayload = [path, model] -> std::expected<QHttpMultiPart*, QString> {
+        auto* file = new QFile(path);
+        if (!file->open(QFile::ReadOnly)) {
+            qWarning() << "Could not open file" << path << "for reading:" << file->errorString();
+            file->deleteLater();
+            return std::unexpected(QObject::tr("Could not open file %1 for reading: %2").arg(path, file->errorString()));
+        }
+
+        QHttpPart modelPart;
+        modelPart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant(R"(form-data; name="model")"));
+        modelPart.setBody(model);
+
+        QHttpPart skin;
+        skin.setHeader(QNetworkRequest::ContentTypeHeader, QVariant("image/png"));
+        skin.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant(R"(form-data; name="file"; filename="skin.png")"));
+        skin.setBodyDevice(file);
+
+        auto* multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+        file->setParent(multiPart);
+        multiPart->append(modelPart);
+        multiPart->append(skin);
+        return multiPart;
+    };
+    auto req = Net::Request::makeCustomRequest({ .method = Net::HttpMethod::Put, .url = yggdrasilSkinUrl(apiRoot, uuid), .data = getPayload });
+    req->setLogCat(taskMCSkinsLogC);
+    req->setSink(std::make_unique<Net::DummySink>());
+    req->addHeaderProxy(bearer(token));
+    return req;
+}
+
+Net::Request::Ptr makeYggdrasilSkinDeleteRequest(const QString& apiRoot, const QString& token, const QString& uuid)
+{
+    auto req = Net::Request::makeCustomRequest({ .method = Net::HttpMethod::Delete, .url = yggdrasilSkinUrl(apiRoot, uuid) });
+    req->setLogCat(taskMCSkinsLogC);
+    req->setSink(std::make_unique<Net::DummySink>());
+    req->addHeaderProxy(bearer(token));
+    return req;
+}

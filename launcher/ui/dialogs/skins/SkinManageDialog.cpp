@@ -89,6 +89,10 @@ SkinManageDialog::SkinManageDialog(QWidget* parent, MinecraftAccountPtr acct)
     });
 
     setupCapes();
+    if (m_acct->accountType() == AccountType::AuthlibInjector) {
+        m_ui->capeCombo->setEnabled(false);
+        m_ui->capeCombo->setToolTip(tr("Capes are managed on the authentication server's website."));
+    }
 
     m_ui->listView->setCurrentIndex(m_list.index(m_list.getSelectedAccountSkin()));
 
@@ -295,11 +299,18 @@ void SkinManageDialog::accept()
         return;
     }
 
-    skinUpload->addNetAction(makeSkinUploadRequest(m_acct->accessToken(), skin->getPath(), skin->getModelString()));
+    auto* data = m_acct->accountData();
+    if (m_acct->accountType() == AccountType::AuthlibInjector) {
+        // Yggdrasil servers have no cape selection API; capes are managed on the server's website
+        skinUpload->addNetAction(makeYggdrasilSkinUploadRequest(data->authlibInjectorUrl, m_acct->accessToken(), m_acct->profileId(),
+                                                                skin->getPath(), skin->getModelString()));
+    } else {
+        skinUpload->addNetAction(makeSkinUploadRequest(m_acct->accessToken(), skin->getPath(), skin->getModelString()));
 
-    auto selectedCape = skin->getCapeId();
-    if (selectedCape != m_acct->accountData()->minecraftProfile.currentCape) {
-        skinUpload->addNetAction(makeCapeChangeRequest(m_acct->accessToken(), selectedCape));
+        auto selectedCape = skin->getCapeId();
+        if (selectedCape != data->minecraftProfile.currentCape) {
+            skinUpload->addNetAction(makeCapeChangeRequest(m_acct->accessToken(), selectedCape));
+        }
     }
 
     skinUpload->addTask(m_acct->refresh().staticCast<Task>());
@@ -316,7 +327,12 @@ void SkinManageDialog::on_resetBtn_clicked()
 {
     ProgressDialog prog(this);
     NetJob::Ptr skinReset{ new NetJob(tr("Reset skin"), APPLICATION->network(), 1) };
-    skinReset->addNetAction(makeSkinDeleteRequest(m_acct->accessToken()));
+    if (m_acct->accountType() == AccountType::AuthlibInjector) {
+        skinReset->addNetAction(
+            makeYggdrasilSkinDeleteRequest(m_acct->accountData()->authlibInjectorUrl, m_acct->accessToken(), m_acct->profileId()));
+    } else {
+        skinReset->addNetAction(makeSkinDeleteRequest(m_acct->accessToken()));
+    }
     skinReset->addTask(m_acct->refresh().staticCast<Task>());
     if (prog.execWithTask(skinReset.get()) != QDialog::Accepted) {
         CustomMessageBox::selectable(this, tr("Skin Delete"), tr("Failed to delete current skin!"), QMessageBox::Warning)->exec();

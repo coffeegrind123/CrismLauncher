@@ -213,6 +213,7 @@ void AccountListPage::updateButtonStates()
     bool hasSelection = !selection.empty();
     bool accountIsReady = false;
     bool accountIsOnline = false;
+    bool accountCanManageSkins = false;
     bool accountCanMoveUp = false;
     bool accountCanMoveDown = false;
     if (hasSelection) {
@@ -220,6 +221,9 @@ void AccountListPage::updateButtonStates()
         MinecraftAccountPtr account = selected.data(AccountList::PointerRole).value<MinecraftAccountPtr>();
         accountIsReady = !account->isActive();
         accountIsOnline = account->accountType() != AccountType::Offline;
+        // Yggdrasil servers say whether skins can be uploaded through the API; Ely.by's can't
+        accountCanManageSkins = account->accountType() == AccountType::MSA ||
+                                (account->accountType() == AccountType::AuthlibInjector && account->accountData()->minecraftProfile.canUploadSkins);
 
         accountCanMoveUp = selected.row() > 0;
         int indexOfLast = m_accounts->count() - 1;
@@ -227,7 +231,7 @@ void AccountListPage::updateButtonStates()
     }
     ui->actionRemove->setEnabled(accountIsReady);
     ui->actionSetDefault->setEnabled(accountIsReady);
-    ui->actionManageSkins->setEnabled(accountIsReady && accountIsOnline);
+    ui->actionManageSkins->setEnabled(accountIsReady && accountCanManageSkins);
     ui->actionRefresh->setEnabled(accountIsReady && accountIsOnline);
 
     if (m_accounts->defaultAccount().get() == nullptr) {
