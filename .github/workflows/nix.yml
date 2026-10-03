@@ -4,6 +4,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Disabled on this fork: manual runs only
+on:
+  workflow_dispatch:
+
 permissions: {}
 
 env:
