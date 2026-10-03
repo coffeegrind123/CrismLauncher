@@ -57,6 +57,12 @@ on:
       - ".github/actions/setup-dependencies/**"
   workflow_dispatch:
 
+# One release run at a time: each run deletes and recreates the release, so overlapping runs race.
+# Queued runs wait for the running one instead of cancelling a nearly finished release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build (${{ matrix.artifact-name }})
