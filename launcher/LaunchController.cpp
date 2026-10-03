@@ -42,6 +42,8 @@
 
 #include "net/NetUtils.h"
 #include "ui/InstanceWindow.h"
+#include "minecraft/auth/Yggdrasil.h"
+#include "ui/dialogs/AuthlibInjectorLoginDialog.h"
 #include "ui/dialogs/CustomMessageBox.h"
 #include "ui/dialogs/MSALoginDialog.h"
 #include "ui/dialogs/ProfileSelectDialog.h"
@@ -135,20 +137,12 @@ LaunchDecision LaunchController::decideLaunchMode()
         return LaunchDecision::Continue;
     }
 
-    const auto* accounts = APPLICATION->accounts();
     MinecraftAccountPtr accountToCheck = nullptr;
 
-    if (m_accountToUse->accountType() != AccountType::Offline) {
-        accountToCheck = m_accountToUse->ownsMinecraft() ? m_accountToUse : nullptr;
-    } else if (const auto defaultAccount = accounts->defaultAccount(); defaultAccount && defaultAccount->ownsMinecraft()) {
-        accountToCheck = defaultAccount;
-    } else {
-        for (int i = 0; i < accounts->count(); i++) {
-            if (const auto account = accounts->at(i); account->ownsMinecraft()) {
-                accountToCheck = account;
-                break;
-            }
-        }
+    // Every account counts as owning the game here, so an offline account is checked as itself
+    // rather than by refreshing some other (possibly unrelated server's) account
+    if (m_accountToUse->ownsMinecraft()) {
+        accountToCheck = m_accountToUse;
     }
 
     if (!accountToCheck) {
@@ -309,6 +303,19 @@ void LaunchController::login()
     m_session->launchMode = m_actualLaunchMode;
     m_accountToUse->fillSession(m_session);
 
+    if (m_accountToUse->accountType() == AccountType::AuthlibInjector && m_actualLaunchMode == LaunchMode::Normal &&
+        !m_accountToUse->hasProfile()) {
+        // Characters on Yggdrasil servers are created on the server's website, not through Mojang's API
+        auto* data = m_accountToUse->accountData();
+        auto message = tr("This account has no Minecraft character yet. Create one on %1, then log in again.").arg(data->serverName());
+        if (const auto homepage = Yggdrasil::linkFromMetadata(data->authlibInjectorMetadata, "homepage"); !homepage.isEmpty()) {
+            message += QString("<br><br><a href=\"%1\">%1</a>").arg(homepage.toHtmlEscaped());
+        }
+        CustomMessageBox::selectable(m_parentWidget, tr("No character"), message, QMessageBox::Warning)->exec();
+        emitAborted();
+        return;
+    }
+
     if (m_accountToUse->accountType() != AccountType::Offline) {
         if (m_actualLaunchMode == LaunchMode::Normal && !m_accountToUse->hasProfile()) {
             // Now handle setting up a profile name here...
@@ -343,23 +350,26 @@ bool LaunchController::reauthenticateAccount(const MinecraftAccountPtr& account,
     if (button == QMessageBox::StandardButton::Yes) {
         auto* accounts = APPLICATION->accounts();
         const bool isDefault = accounts->defaultAccount() == account;
+        MinecraftAccountPtr newAccount;
         if (account->accountType() == AccountType::MSA) {
-            auto newAccount = MSALoginDialog::newAccount(m_parentWidget);
+            newAccount = MSALoginDialog::newAccount(m_parentWidget);
+        } else if (account->accountType() == AccountType::AuthlibInjector) {
+            newAccount = AuthlibInjectorLoginDialog::newAccount(m_parentWidget, tr("Please log in again."), account);
+        }
 
-            if (newAccount != nullptr) {
-                accounts->removeAccount(accounts->index(accounts->findAccountByProfileId(account->profileId())));
-                accounts->addAccount(newAccount);
+        if (newAccount != nullptr) {
+            accounts->removeAccount(accounts->index(accounts->findSameAccount(account)));
+            accounts->addAccount(newAccount);
 
-                if (isDefault) {
-                    accounts->setDefaultAccount(newAccount);
-                }
-
-                if (m_accountToUse == account) {
-                    m_accountToUse = nullptr;
-                    decideAccount();
-                }
-                return true;
+            if (isDefault) {
+                accounts->setDefaultAccount(newAccount);
             }
+
+            if (m_accountToUse == account) {
+                m_accountToUse = nullptr;
+                decideAccount();
+            }
+            return true;
         }
     }
 
@@ -399,7 +409,10 @@ void LaunchController::launchInstance()
         online_mode = "online";
 
         // Prepend Server Status
-        const QStringList servers = { "login.microsoftonline.com", "session.minecraft.net", "textures.minecraft.net", "api.mojang.com" };
+        QStringList servers = { "login.microsoftonline.com", "session.minecraft.net", "textures.minecraft.net", "api.mojang.com" };
+        if (m_session && m_session->usesAuthlibInjector()) {
+            servers = { QUrl(m_session->authlib_injector_url).host() };
+        }
 
         m_launcher->prependStep(makeShared<PrintServers>(m_launcher, servers));
     } else {

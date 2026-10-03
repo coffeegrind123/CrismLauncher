@@ -44,6 +44,7 @@
 
 #include <QDebug>
 
+#include "ui/dialogs/AuthlibInjectorLoginDialog.h"
 #include "ui/dialogs/ChooseOfflineNameDialog.h"
 #include "ui/dialogs/CustomMessageBox.h"
 #include "ui/dialogs/MSALoginDialog.h"
@@ -147,6 +148,17 @@ void AccountListPage::on_actionAddOffline_triggered()
 
     if (const MinecraftAccountPtr account = MinecraftAccount::createOffline(dialog.getUsername())) {
         account->login()->start();  // The task will complete here.
+        m_accounts->addAccount(account);
+        if (m_accounts->count() == 1) {
+            m_accounts->setDefaultAccount(account);
+        }
+    }
+}
+
+void AccountListPage::on_actionAddAuthlibInjector_triggered()
+{
+    auto account = AuthlibInjectorLoginDialog::newAccount(this, tr("Log in with an account from an authlib-injector compatible server."));
+    if (account) {
         m_accounts->addAccount(account);
         if (m_accounts->count() == 1) {
             m_accounts->setDefaultAccount(account);

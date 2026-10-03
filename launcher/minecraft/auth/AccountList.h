@@ -80,6 +80,10 @@ class AccountList : public QAbstractListModel {
     void removeAccount(QModelIndex index);
     void moveAccount(QModelIndex index, int delta);
     int findAccountByProfileId(const QString& profileId) const;
+
+    /** Index of the account that is the same identity as `account`: same type, server and profile.
+     *  Profile IDs alone collide, e.g. an offline "Steve" and one on a server using offline UUIDs. */
+    int findSameAccount(const MinecraftAccountPtr& account) const;
     MinecraftAccountPtr getAccountByProfileName(const QString& profileName) const;
     QStringList profileNames() const;
 

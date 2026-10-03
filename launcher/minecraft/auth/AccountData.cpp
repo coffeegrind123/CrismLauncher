@@ -38,7 +38,10 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QUrl>
 #include <QUuid>
+
+#include "Yggdrasil.h"
 
 namespace {
 void tokenToJSONV3(QJsonObject& parent, const Token& t, const char* tokenName)
@@ -119,6 +122,9 @@ void profileToJSONV3(QJsonObject& parent, MinecraftProfile p, const char* tokenN
     if (!p.currentCape.isEmpty()) {
         out["cape"] = p.currentCape;
     }
+    if (p.canUploadSkins) {
+        out["canUploadSkins"] = true;
+    }
 
     {
         QJsonObject skinObj;
@@ -162,6 +168,7 @@ MinecraftProfile profileFromJSONV3(const QJsonObject& parent, const char* tokenN
         }
         out.name = nameV.toString();
         out.id = idV.toString();
+        out.canUploadSkins = tokenObject.value("canUploadSkins").toBool(false);
     }
 
     {
@@ -291,9 +298,30 @@ bool AccountData::resumeStateFromV3(QJsonObject data)
         type = AccountType::MSA;
     } else if (typeS == "Offline") {
         type = AccountType::Offline;
+    } else if (typeS == "AuthlibInjector") {
+        type = AccountType::AuthlibInjector;
+    } else if (typeS == "Elyby") {
+        // Fjord Launcher's legacy Ely.by accounts
+        type = AccountType::AuthlibInjector;
+        authlibInjectorUrl = Yggdrasil::ELYBY_API_ROOT;
     } else {
         qWarning() << "Failed to parse account data: type is not recognized.";
         return false;
+    }
+
+    if (type == AccountType::AuthlibInjector && typeS != "Elyby") {
+        authlibInjectorUrl = data.value("authlibInjectorUrl").toString();
+        authlibInjectorMetadata = data.value("authlibInjectorMetadata").toString();
+
+        // Fjord Launcher stores the endpoints rather than the root; recover it from the auth server
+        const auto legacyAuthServer = data.value("customAuthServerUrl").toString();
+        if (authlibInjectorUrl.isEmpty() && legacyAuthServer.endsWith("/authserver")) {
+            authlibInjectorUrl = legacyAuthServer.chopped(QString("/authserver").size());
+        }
+        if (authlibInjectorUrl.isEmpty()) {
+            qWarning() << "Failed to parse account data: authlib-injector account has no server.";
+            return false;
+        }
     }
 
     if (type == AccountType::MSA) {
@@ -335,6 +363,16 @@ QJsonObject AccountData::saveState() const
         tokenToJSONV3(output, mojangservicesToken, "xrp-mc");
     } else if (type == AccountType::Offline) {
         output["type"] = "Offline";
+    } else if (type == AccountType::AuthlibInjector) {
+        output["type"] = "AuthlibInjector";
+        output["authlibInjectorUrl"] = authlibInjectorUrl;
+        output["authlibInjectorMetadata"] = authlibInjectorMetadata;
+
+        // Written so the accounts file stays loadable by Fjord Launcher
+        output["customAuthServerUrl"] = authServerUrl();
+        output["customAccountServerUrl"] = accountServerUrl();
+        output["customSessionServerUrl"] = sessionServerUrl();
+        output["customServicesServerUrl"] = servicesServerUrl();
     }
 
     tokenToJSONV3(output, yggdrasilToken, "ygg");
@@ -365,4 +403,48 @@ QString AccountData::profileName() const
 QString AccountData::lastError() const
 {
     return errorString;
+}
+
+QString AccountData::authServerUrl() const
+{
+    return authlibInjectorUrl + "/authserver";
+}
+
+QString AccountData::sessionServerUrl() const
+{
+    return authlibInjectorUrl + "/sessionserver";
+}
+
+QString AccountData::accountServerUrl() const
+{
+    return authlibInjectorUrl + "/api";
+}
+
+QString AccountData::servicesServerUrl() const
+{
+    return authlibInjectorUrl + "/minecraftservices";
+}
+
+QString AccountData::userName() const
+{
+    return yggdrasilToken.extra.value("userName").toString();
+}
+
+QString AccountData::clientToken() const
+{
+    return yggdrasilToken.extra.value("clientToken").toString();
+}
+
+void AccountData::generateClientToken()
+{
+    yggdrasilToken.extra["clientToken"] = QUuid::createUuid().toString(QUuid::Id128);
+}
+
+QString AccountData::serverName() const
+{
+    const auto name = Yggdrasil::serverNameFromMetadata(authlibInjectorMetadata);
+    if (!name.isEmpty()) {
+        return name;
+    }
+    return QUrl(authlibInjectorUrl).host();
 }

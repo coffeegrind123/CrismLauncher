@@ -23,6 +23,7 @@ bool AuthSession::MakeOffline(QString offline_playername)
     session = "-";
     access_token = "0";
     player_name = offline_playername;
+    authlib_injector_url.clear();
     return true;
 }
 
@@ -33,4 +34,5 @@ void AuthSession::MakeDemo(QString name, QString u)
     access_token = "0";
     player_name = name;
     launchMode = LaunchMode::Demo;
+    authlib_injector_url.clear();
 };

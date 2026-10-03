@@ -25,6 +25,15 @@ struct AuthSession {
     QString user_type;
     // the actual launch mode for this session
     LaunchMode launchMode;
+
+    // authlib-injector: API root of the account's Yggdrasil server (empty for other accounts), its
+    // base64 metadata, and the agent jar resolved during launch
+    QString authlib_injector_url;
+    QString authlib_injector_metadata;
+    QString authlib_injector_jar;
+
+    //! Offline and demo launches don't talk to the server, so they run without the agent
+    bool usesAuthlibInjector() const { return !authlib_injector_url.isEmpty() && launchMode == LaunchMode::Normal; }
 };
 
 using AuthSessionPtr = std::shared_ptr<AuthSession>;

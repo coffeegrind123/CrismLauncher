@@ -63,6 +63,9 @@ ecm_add_test(FlameCdnUrl_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_M
 ecm_add_test(OptiFineUrl_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME OptiFineUrl)
 
+ecm_add_test(Yggdrasil_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
+    TEST_NAME Yggdrasil)
+
 ecm_add_test(MetaComponentParse_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME MetaComponentParse)
 

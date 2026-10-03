@@ -217,6 +217,10 @@ set(MINECRAFT_SOURCES
     minecraft/auth/MinecraftAccount.h
     minecraft/auth/Parsers.cpp
     minecraft/auth/Parsers.h
+    minecraft/auth/Yggdrasil.cpp
+    minecraft/auth/Yggdrasil.h
+    minecraft/auth/YggdrasilServerResolveTask.cpp
+    minecraft/auth/YggdrasilServerResolveTask.h
 
     minecraft/auth/AuthFlow.cpp
     minecraft/auth/AuthFlow.h
@@ -237,6 +241,12 @@ set(MINECRAFT_SOURCES
     minecraft/auth/steps/XboxAuthorizationStep.h
     minecraft/auth/steps/XboxUserStep.cpp
     minecraft/auth/steps/XboxUserStep.h
+    minecraft/auth/steps/YggdrasilStep.cpp
+    minecraft/auth/steps/YggdrasilStep.h
+    minecraft/auth/steps/YggdrasilProfileStep.cpp
+    minecraft/auth/steps/YggdrasilProfileStep.h
+    minecraft/auth/steps/AuthlibInjectorMetadataStep.cpp
+    minecraft/auth/steps/AuthlibInjectorMetadataStep.h
 
     minecraft/update/AssetUpdateTask.h
     minecraft/update/AssetUpdateTask.cpp
@@ -1087,6 +1097,8 @@ SET(LAUNCHER_SOURCES
     ui/dialogs/InstallLoaderDialog.h
     ui/dialogs/ChooseOfflineNameDialog.cpp
     ui/dialogs/ChooseOfflineNameDialog.h
+    ui/dialogs/AuthlibInjectorLoginDialog.cpp
+    ui/dialogs/AuthlibInjectorLoginDialog.h
     ui/dialogs/UntrustedModsDialog.cpp
     ui/dialogs/UntrustedModsDialog.h
 

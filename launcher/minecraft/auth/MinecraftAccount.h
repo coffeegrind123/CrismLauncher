@@ -43,6 +43,8 @@
 #include <QPixmap>
 #include <QString>
 
+#include <optional>
+
 #include "AccountData.h"
 #include "AuthSession.h"
 #include "QObjectPtr.h"
@@ -87,6 +89,10 @@ class MinecraftAccount : public QObject, public Usable {
 
     static MinecraftAccountPtr createOffline(const QString& username);
 
+    /** A not yet logged in account on the Yggdrasil server at `apiRoot` (already resolved through
+     *  X-Authlib-Injector-API-Location), whose metadata document is `metadata`. */
+    static MinecraftAccountPtr createAuthlibInjector(const QString& username, const QString& apiRoot, const QByteArray& metadata);
+
     static MinecraftAccountPtr loadFromJsonV3(const QJsonObject& json);
 
     static QUuid uuidFromUsername(QString username);
@@ -95,7 +101,8 @@ class MinecraftAccount : public QObject, public Usable {
     QJsonObject saveToJson() const;
 
    public: /* manipulation */
-    shared_qobject_ptr<AuthFlow> login(bool useDeviceCode = false);
+    //! `password` is required for, and only used by, AuthlibInjector accounts
+    shared_qobject_ptr<AuthFlow> login(bool useDeviceCode = false, std::optional<QString> password = std::nullopt);
 
     shared_qobject_ptr<AuthFlow> refresh();
 
@@ -128,6 +135,11 @@ class MinecraftAccount : public QObject, public Usable {
             } break;
             case AccountType::Offline: {
                 return "offline";
+            } break;
+            case AccountType::AuthlibInjector: {
+                // "mojang" would disable profile keys, which breaks chat on servers that
+                // enforce secure profiles (1.19.3+)
+                return "msa";
             } break;
             default: {
                 return "unknown";

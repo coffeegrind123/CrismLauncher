@@ -79,6 +79,21 @@ int AccountList::findAccountByProfileId(const QString& profileId) const
     return -1;
 }
 
+int AccountList::findSameAccount(const MinecraftAccountPtr& account) const
+{
+    if (account->profileId().isEmpty()) {
+        return -1;
+    }
+    for (int i = 0; i < count(); i++) {
+        MinecraftAccountPtr other = at(i);
+        if (other->profileId() == account->profileId() && other->accountType() == account->accountType() &&
+            other->accountData()->authlibInjectorUrl == account->accountData()->authlibInjectorUrl) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 MinecraftAccountPtr AccountList::getAccountByProfileName(const QString& profileName) const
 {
     for (int i = 0; i < count(); i++) {
@@ -121,10 +136,9 @@ void AccountList::addAccount(const MinecraftAccountPtr account)
     connect(account.get(), &MinecraftAccount::changed, this, &AccountList::accountChanged);
     connect(account.get(), &MinecraftAccount::activityChanged, this, &AccountList::accountActivityChanged);
 
-    // override/replace existing account with the same profileId
-    auto profileId = account->profileId();
-    if (profileId.size()) {
-        auto existingAccount = findAccountByProfileId(profileId);
+    // override/replace existing account with the same identity
+    {
+        auto existingAccount = findSameAccount(account);
         if (existingAccount != -1) {
             qDebug() << "Replacing old account with a new one with the same profile ID!";
 
@@ -347,6 +361,9 @@ QVariant AccountList::data(const QModelIndex& index, int role) const
                         case AccountType::Offline: {
                             return tr("Offline", "Account type");
                         }
+                        case AccountType::AuthlibInjector: {
+                            return account->accountData()->serverName();
+                        }
                     }
                     return tr("Unknown", "Account type");
                 }
@@ -389,7 +406,7 @@ QVariant AccountList::headerData(int section, [[maybe_unused]] Qt::Orientation o
                 case ProfileNameColumn:
                     return tr("Minecraft username associated with the account.");
                 case TypeColumn:
-                    return tr("Type of the account (MSA or Offline)");
+                    return tr("Type of the account (MSA, Offline, or the authentication server it belongs to)");
                 case StatusColumn:
                     return tr("Current status of the account.");
                 default:
@@ -490,11 +507,8 @@ bool AccountList::loadV3(QJsonObject& root)
         QJsonObject accountObj = accountVal.toObject();
         MinecraftAccountPtr account = MinecraftAccount::loadFromJsonV3(accountObj);
         if (account.get() != nullptr) {
-            auto profileId = account->profileId();
-            if (profileId.size()) {
-                if (findAccountByProfileId(profileId) != -1) {
-                    continue;
-                }
+            if (findSameAccount(account) != -1) {
+                continue;
             }
             connect(account.get(), &MinecraftAccount::changed, this, &AccountList::accountChanged);
             connect(account.get(), &MinecraftAccount::activityChanged, this, &AccountList::accountActivityChanged);

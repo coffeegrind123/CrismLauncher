@@ -5,6 +5,8 @@
 #include <QObject>
 #include <QSet>
 
+#include <optional>
+
 #include "minecraft/auth/AccountData.h"
 #include "minecraft/auth/AuthStep.h"
 #include "tasks/Task.h"
@@ -15,7 +17,8 @@ class AuthFlow : public Task {
    public:
     enum class Action { Refresh, Login, DeviceCode };
 
-    explicit AuthFlow(AccountData* data, Action action = Action::Refresh);
+    //! `password` is only used to log in to AuthlibInjector accounts
+    explicit AuthFlow(AccountData* data, Action action = Action::Refresh, std::optional<QString> password = std::nullopt);
     virtual ~AuthFlow() = default;
 
     void executeTask() override;
@@ -28,6 +31,10 @@ class AuthFlow : public Task {
    signals:
     void authorizeWithBrowser(const QUrl& url);
     void authorizeWithBrowserWithExtra(QString url, QString code, int expiresIn);
+
+    //! See YggdrasilStep::selectProfile; connect with a direct connection
+    void selectProfile(const QStringList& names, int* chosenIndex);
+    void twoFactorRequired();
 
    protected:
     void succeed();

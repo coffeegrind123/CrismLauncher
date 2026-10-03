@@ -85,10 +85,13 @@ struct MinecraftProfile {
     Skin skin;
     QString currentCape;
     QMap<QString, Cape> capes;
+    // Yggdrasil servers advertise this through the "uploadableTextures" profile property
+    bool canUploadSkins = false;
     Validity validity = Validity::None;
 };
 
-enum class AccountType { MSA, Offline };
+// AuthlibInjector: any Yggdrasil-compatible server (Ely.by, LittleSkin, Drasl, ...) used through authlib-injector
+enum class AccountType { MSA, Offline, AuthlibInjector };
 
 enum class AccountState { Unchecked, Offline, Working, Online, Disabled, Errored, Expired, Gone };
 
@@ -104,7 +107,26 @@ struct AccountData {
 
     QString lastError() const;
 
+    // AuthlibInjector endpoints, all derived from the API root (authlibInjectorUrl)
+    QString authServerUrl() const;
+    QString sessionServerUrl() const;
+    QString accountServerUrl() const;
+    QString servicesServerUrl() const;
+
+    //! Login name (username or e-mail) used against the Yggdrasil server
+    QString userName() const;
+    QString clientToken() const;
+    void generateClientToken();
+
+    //! Human readable server name from the metadata, falling back to the API root's host
+    QString serverName() const;
+
     AccountType type = AccountType::MSA;
+
+    // AuthlibInjector only: the API root after X-Authlib-Injector-API-Location resolution, and the
+    // base64 of its metadata document, handed to the game as authlibinjector.yggdrasil.prefetched
+    QString authlibInjectorUrl;
+    QString authlibInjectorMetadata;
 
     QString msaClientID;
     Token msaToken;

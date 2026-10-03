@@ -300,9 +300,16 @@ bool parseMinecraftProfileMojang(QByteArray& data, MinecraftProfile& output)
 
     auto propsArray = obj->value("properties").toArray();
     QByteArray texturePayload;
+    output.canUploadSkins = false;
     for (auto p : propsArray) {
         auto pObj = p.toObject();
         auto name = pObj.value("name");
+
+        // Yggdrasil servers list the texture types players may upload, e.g. "skin,cape"
+        if (name.toString() == "uploadableTextures") {
+            output.canUploadSkins = pObj.value("value").toString().split(',').contains("skin");
+            continue;
+        }
         if (!name.isString() || name.toString() != "textures") {
             continue;
         }
@@ -317,9 +324,23 @@ bool parseMinecraftProfileMojang(QByteArray& data, MinecraftProfile& output)
         }
     }
 
+    Skin skinOut;
+    // fill in default skin info ourselves, as this endpoint doesn't provide it
+    bool steve = isDefaultModelSteve(output.id);
+    skinOut.variant = steve ? "CLASSIC" : "SLIM";
+    skinOut.url = steve ? SKIN_URL_STEVE : SKIN_URL_ALEX;
+    // sadly we can't figure this out, but I don't think it really matters...
+    skinOut.id = "00000000-0000-0000-0000-000000000000";
+    Cape capeOut;
+
+    // Yggdrasil servers omit the textures property for players without a skin; they get the default
     if (texturePayload.isNull()) {
-        qWarning() << "No texture payload data";
-        return false;
+        qDebug() << "No texture payload data, using the default skin";
+        output.skin = skinOut;
+        output.capes.clear();
+        output.currentCape.clear();
+        output.validity = Validity::Certain;
+        return true;
     }
 
     obj = Json::requireObject(texturePayload, "session texture payload");
@@ -335,14 +356,6 @@ bool parseMinecraftProfileMojang(QByteArray& data, MinecraftProfile& output)
         return false;
     }
 
-    Skin skinOut;
-    // fill in default skin info ourselves, as this endpoint doesn't provide it
-    bool steve = isDefaultModelSteve(output.id);
-    skinOut.variant = steve ? "CLASSIC" : "SLIM";
-    skinOut.url = steve ? SKIN_URL_STEVE : SKIN_URL_ALEX;
-    // sadly we can't figure this out, but I don't think it really matters...
-    skinOut.id = "00000000-0000-0000-0000-000000000000";
-    Cape capeOut;
     auto tObj = textures.toObject();
     for (auto idx = tObj.constBegin(); idx != tObj.constEnd(); ++idx) {
         if (idx->isObject()) {
