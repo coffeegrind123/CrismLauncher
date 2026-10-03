@@ -138,6 +138,8 @@ set(NET_SOURCES
     net/ApiRequest.h
     net/Request.cpp
     net/Request.h
+    net/DownloadMirror.cpp
+    net/DownloadMirror.h
     net/RPCSink.h
 )
 
