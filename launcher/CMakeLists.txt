@@ -648,6 +648,8 @@ set(PRISMUPDATER_SOURCES
     net/Logging.cpp
     net/Request.cpp
     net/Request.h
+    net/DownloadMirror.cpp
+    net/DownloadMirror.h
     net/NetJob.cpp
     net/NetJob.h
     net/NetUtils.h
