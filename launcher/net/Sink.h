@@ -35,6 +35,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <expected>
 #include "Validator.h"
 
@@ -60,6 +61,12 @@ class Sink {
         if (validator) {
             m_validators.push_back(std::shared_ptr<Validator>(validator));
         }
+    }
+
+    //! True if a validator pins the exact content, so its source doesn't need to be trusted
+    bool hasContentPin() const
+    {
+        return std::ranges::any_of(m_validators, [](const auto& validator) { return validator->pinsContent(); });
     }
 
    protected:

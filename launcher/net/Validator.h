@@ -48,5 +48,8 @@ class Validator {
     virtual void write(const QByteArray& data) = 0;
     virtual void abort() = 0;
     virtual Result<> validate() = 0;
+
+    //! True if this validator only accepts one specific content (an expected checksum)
+    virtual bool pinsContent() const { return false; }
 };
 }  // namespace Net

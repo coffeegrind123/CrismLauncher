@@ -66,6 +66,8 @@ class ChecksumValidator : public Validator {
 
     auto hash() -> QByteArray { return m_checksum.result(); }
 
+    bool pinsContent() const override { return !m_expected.isEmpty(); }
+
     void setExpected(QByteArray expected) { m_expected = std::move(expected); }
 
    private:
