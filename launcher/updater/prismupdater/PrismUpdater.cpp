@@ -694,7 +694,8 @@ QList<GitHubReleaseAsset> PrismUpdaterApp::validReleaseArtifacts(const GitHubRel
         auto assetName = asset.name.toLower();
         auto [platform, platformQtVer] = StringUtils::splitFirst(BuildConfig.BUILD_ARTIFACT.toLower(), "-qt");
         auto systemIsArm = QSysInfo::buildCpuArchitecture().contains("arm64");
-        auto assetIsArm = assetName.contains("arm64");
+        // Linux ARM packages are named "aarch64" (e.g. PrismLauncher-Linux-aarch64-Qt6-Portable-*.tar.gz)
+        auto assetIsArm = assetName.contains("arm64") || assetName.contains("aarch64");
         auto assetIsArchive = assetName.endsWith(".zip") || assetName.endsWith(".tar.gz");
 
         bool forPlatform = !platform.isEmpty() && assetName.contains(platform);
