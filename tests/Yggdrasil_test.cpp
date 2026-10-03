@@ -163,7 +163,7 @@ class YggdrasilTest : public QObject {
         account.generateClientToken();
         account.minecraftProfile.id = "a1";
         account.minecraftProfile.name = "Alice";
-        account.minecraftProfile.canUploadSkins = true;
+        account.minecraftProfile.canUploadSkins = false;
         account.minecraftProfile.validity = Validity::Certain;
 
         const auto json = account.saveState();
@@ -180,7 +180,13 @@ class YggdrasilTest : public QObject {
         QCOMPARE(loaded.clientToken(), account.clientToken());
         QCOMPARE(loaded.serverName(), "LittleSkin");
         QCOMPARE(loaded.sessionServerUrl(), "https://littleskin.cn/api/yggdrasil/sessionserver");
-        QVERIFY(loaded.minecraftProfile.canUploadSkins);
+        QVERIFY(!loaded.minecraftProfile.canUploadSkins);
+        QVERIFY(!loaded.supportsSkinUpload());
+
+        loaded.minecraftProfile.canUploadSkins = true;
+        QVERIFY(loaded.supportsSkinUpload());
+        loaded.authlibInjectorUrl = Yggdrasil::ELYBY_API_ROOT;
+        QVERIFY(!loaded.supportsSkinUpload());
     }
 
     void fjordAccountImport()

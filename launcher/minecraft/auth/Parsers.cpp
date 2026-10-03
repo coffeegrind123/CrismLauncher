@@ -300,7 +300,7 @@ bool parseMinecraftProfileMojang(QByteArray& data, MinecraftProfile& output)
 
     auto propsArray = obj->value("properties").toArray();
     QByteArray texturePayload;
-    output.canUploadSkins = false;
+    output.canUploadSkins = true;
     for (auto p : propsArray) {
         auto pObj = p.toObject();
         auto name = pObj.value("name");

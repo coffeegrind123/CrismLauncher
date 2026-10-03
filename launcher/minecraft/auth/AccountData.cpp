@@ -122,8 +122,8 @@ void profileToJSONV3(QJsonObject& parent, MinecraftProfile p, const char* tokenN
     if (!p.currentCape.isEmpty()) {
         out["cape"] = p.currentCape;
     }
-    if (p.canUploadSkins) {
-        out["canUploadSkins"] = true;
+    if (!p.canUploadSkins) {
+        out["canUploadSkins"] = false;
     }
 
     {
@@ -168,7 +168,7 @@ MinecraftProfile profileFromJSONV3(const QJsonObject& parent, const char* tokenN
         }
         out.name = nameV.toString();
         out.id = idV.toString();
-        out.canUploadSkins = tokenObject.value("canUploadSkins").toBool(false);
+        out.canUploadSkins = tokenObject.value("canUploadSkins").toBool(true);
     }
 
     {
@@ -438,6 +438,14 @@ QString AccountData::clientToken() const
 void AccountData::generateClientToken()
 {
     yggdrasilToken.extra["clientToken"] = QUuid::createUuid().toString(QUuid::Id128);
+}
+
+bool AccountData::supportsSkinUpload() const
+{
+    if (type != AccountType::AuthlibInjector) {
+        return type == AccountType::MSA;
+    }
+    return minecraftProfile.canUploadSkins && QUrl(authlibInjectorUrl).host() != QUrl(Yggdrasil::ELYBY_API_ROOT).host();
 }
 
 QString AccountData::serverName() const

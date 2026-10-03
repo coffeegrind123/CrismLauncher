@@ -85,8 +85,9 @@ struct MinecraftProfile {
     Skin skin;
     QString currentCape;
     QMap<QString, Cape> capes;
-    // Yggdrasil servers advertise this through the "uploadableTextures" profile property
-    bool canUploadSkins = false;
+    // Yggdrasil servers may list what can be uploaded in the "uploadableTextures" profile property;
+    // most (Drasl, LittleSkin, Ely.by) don't send it, so absence means allowed
+    bool canUploadSkins = true;
     Validity validity = Validity::None;
 };
 
@@ -120,6 +121,9 @@ struct AccountData {
 
     //! Human readable server name from the metadata, falling back to the API root's host
     QString serverName() const;
+
+    //! Whether skins can be changed through the server's texture API (Ely.by has none)
+    bool supportsSkinUpload() const;
 
     AccountType type = AccountType::MSA;
 
