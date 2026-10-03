@@ -299,16 +299,16 @@ void SkinManageDialog::accept()
         return;
     }
 
-    auto* data = m_acct->accountData();
+    auto* accountData = m_acct->accountData();
     if (m_acct->accountType() == AccountType::AuthlibInjector) {
         // Yggdrasil servers have no cape selection API; capes are managed on the server's website
-        skinUpload->addNetAction(makeYggdrasilSkinUploadRequest(data->authlibInjectorUrl, m_acct->accessToken(), m_acct->profileId(),
+        skinUpload->addNetAction(makeYggdrasilSkinUploadRequest(accountData->authlibInjectorUrl, m_acct->accessToken(), m_acct->profileId(),
                                                                 skin->getPath(), skin->getModelString()));
     } else {
         skinUpload->addNetAction(makeSkinUploadRequest(m_acct->accessToken(), skin->getPath(), skin->getModelString()));
 
         auto selectedCape = skin->getCapeId();
-        if (selectedCape != data->minecraftProfile.currentCape) {
+        if (selectedCape != accountData->minecraftProfile.currentCape) {
             skinUpload->addNetAction(makeCapeChangeRequest(m_acct->accessToken(), selectedCape));
         }
     }

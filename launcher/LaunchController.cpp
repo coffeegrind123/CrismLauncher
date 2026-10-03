@@ -306,9 +306,9 @@ void LaunchController::login()
     if (m_accountToUse->accountType() == AccountType::AuthlibInjector && m_actualLaunchMode == LaunchMode::Normal &&
         !m_accountToUse->hasProfile()) {
         // Characters on Yggdrasil servers are created on the server's website, not through Mojang's API
-        auto* data = m_accountToUse->accountData();
-        auto message = tr("This account has no Minecraft character yet. Create one on %1, then log in again.").arg(data->serverName());
-        if (const auto homepage = Yggdrasil::linkFromMetadata(data->authlibInjectorMetadata, "homepage"); !homepage.isEmpty()) {
+        auto* accountData = m_accountToUse->accountData();
+        auto message = tr("This account has no Minecraft character yet. Create one on %1, then log in again.").arg(accountData->serverName());
+        if (const auto homepage = Yggdrasil::linkFromMetadata(accountData->authlibInjectorMetadata, "homepage"); !homepage.isEmpty()) {
             message += QString("<br><br><a href=\"%1\">%1</a>").arg(homepage.toHtmlEscaped());
         }
         CustomMessageBox::selectable(m_parentWidget, tr("No character"), message, QMessageBox::Warning)->exec();

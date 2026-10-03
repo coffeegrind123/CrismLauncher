@@ -82,7 +82,7 @@ class YggdrasilTest : public QObject {
         QVERIFY(Yggdrasil::isMetadata(ely));
         QVERIFY(Yggdrasil::isMetadata(littleSkin));
         QVERIFY(!Yggdrasil::isMetadata("<html></html>"));
-        QVERIFY(!Yggdrasil::isMetadata(R"({"meta": "not an object"})"));
+        QVERIFY(!Yggdrasil::isMetadata("{\"meta\": \"not an object\"}"));
 
         const auto elyBase64 = QString::fromLatin1(ely.toBase64());
         QCOMPARE(Yggdrasil::serverNameFromMetadata(elyBase64), "Ely.by");
@@ -93,9 +93,7 @@ class YggdrasilTest : public QObject {
 
     void parseAuthResponse()
     {
-        auto parsed = Yggdrasil::parseAuthResponse(R"({"accessToken":"at","clientToken":"ct",
-            "availableProfiles":[{"id":"a1","name":"Alice"},{"id":"b2","name":"Bob"}],
-            "selectedProfile":{"id":"a1","name":"Alice"}})");
+        auto parsed = Yggdrasil::parseAuthResponse("{\"accessToken\":\"at\",\"clientToken\":\"ct\",\"availableProfiles\":[{\"id\":\"a1\",\"name\":\"Alice\"},{\"id\":\"b2\",\"name\":\"Bob\"}],\"selectedProfile\":{\"id\":\"a1\",\"name\":\"Alice\"}}");
         QVERIFY(std::holds_alternative<Yggdrasil::AuthResponse>(parsed));
         auto response = std::get<Yggdrasil::AuthResponse>(parsed);
         QCOMPARE(response.accessToken, "at");
@@ -104,27 +102,27 @@ class YggdrasilTest : public QObject {
         QCOMPARE(response.selectedProfile->name, "Alice");
         QCOMPARE(response.availableProfiles.size(), 2);
 
-        parsed = Yggdrasil::parseAuthResponse(R"({"accessToken":"at","availableProfiles":[]})");
+        parsed = Yggdrasil::parseAuthResponse("{\"accessToken\":\"at\",\"availableProfiles\":[]}");
         response = std::get<Yggdrasil::AuthResponse>(parsed);
         QVERIFY(!response.selectedProfile.has_value());
         QVERIFY(response.availableProfiles.isEmpty());
 
-        QVERIFY(std::holds_alternative<QString>(Yggdrasil::parseAuthResponse(R"({"clientToken":"ct"})")));
+        QVERIFY(std::holds_alternative<QString>(Yggdrasil::parseAuthResponse("{\"clientToken\":\"ct\"}")));
         QVERIFY(std::holds_alternative<QString>(Yggdrasil::parseAuthResponse("not json")));
     }
 
     void parseError()
     {
-        auto error = Yggdrasil::parseError(R"({"error":"ForbiddenOperationException","errorMessage":"Invalid credentials. Invalid username or password."})");
+        auto error = Yggdrasil::parseError("{\"error\":\"ForbiddenOperationException\",\"errorMessage\":\"Invalid credentials. Invalid username or password.\"}");
         QVERIFY(error.has_value());
         QCOMPARE(error->error, "ForbiddenOperationException");
         QVERIFY(!Yggdrasil::isTwoFactorRequired(*error));
 
-        error = Yggdrasil::parseError(R"({"error":"ForbiddenOperationException","errorMessage":"Account protected with two factor auth."})");
+        error = Yggdrasil::parseError("{\"error\":\"ForbiddenOperationException\",\"errorMessage\":\"Account protected with two factor auth.\"}");
         QVERIFY(error.has_value());
         QVERIFY(Yggdrasil::isTwoFactorRequired(*error));
 
-        QVERIFY(!Yggdrasil::parseError(R"({"accessToken":"at"})").has_value());
+        QVERIFY(!Yggdrasil::parseError("{\"accessToken\":\"at\"}").has_value());
     }
 
     void parseAgentArtifact()
@@ -136,15 +134,13 @@ class YggdrasilTest : public QObject {
             QCOMPARE(artifact->sha256.toHex(), "9c7f4343e6c82034958ffb48c14a2cb0c85928be7283103ce17da00c6d5a7b10");
         }
 
-        const auto foreignHost = R"({"version":"1.2.8","download_url":"https://evil.example/a.jar",
-            "checksums":{"sha256":"9c7f4343e6c82034958ffb48c14a2cb0c85928be7283103ce17da00c6d5a7b10"}})";
+        const auto foreignHost = "{\"version\":\"1.2.8\",\"download_url\":\"https://evil.example/a.jar\",\"checksums\":{\"sha256\":\"9c7f4343e6c82034958ffb48c14a2cb0c85928be7283103ce17da00c6d5a7b10\"}}";
         QVERIFY(!Yggdrasil::parseAgentArtifact(foreignHost).has_value());
 
-        const auto plainHttp = R"({"version":"1.2.8","download_url":"http://authlib-injector.yushi.moe/a.jar",
-            "checksums":{"sha256":"9c7f4343e6c82034958ffb48c14a2cb0c85928be7283103ce17da00c6d5a7b10"}})";
+        const auto plainHttp = "{\"version\":\"1.2.8\",\"download_url\":\"http://authlib-injector.yushi.moe/a.jar\",\"checksums\":{\"sha256\":\"9c7f4343e6c82034958ffb48c14a2cb0c85928be7283103ce17da00c6d5a7b10\"}}";
         QVERIFY(!Yggdrasil::parseAgentArtifact(plainHttp).has_value());
 
-        const auto badHash = R"({"version":"1.2.8","download_url":"https://authlib-injector.yushi.moe/a.jar","checksums":{"sha256":"abc"}})";
+        const auto badHash = "{\"version\":\"1.2.8\",\"download_url\":\"https://authlib-injector.yushi.moe/a.jar\",\"checksums\":{\"sha256\":\"abc\"}}";
         QVERIFY(!Yggdrasil::parseAgentArtifact(badHash).has_value());
     }
 
@@ -190,20 +186,18 @@ class YggdrasilTest : public QObject {
     void fjordAccountImport()
     {
         // Fjord Launcher stores the endpoints but not always the API root
-        const auto json = QJsonDocument::fromJson(R"({"type":"AuthlibInjector",
-            "customAuthServerUrl":"https://authserver.ely.by/api/authlib-injector/authserver",
-            "ygg":{"token":"at","extra":{"userName":"steve","clientToken":"ct"}}})")
+        const auto json = QJsonDocument::fromJson("{\"type\":\"AuthlibInjector\",\"customAuthServerUrl\":\"https://authserver.ely.by/api/authlib-injector/authserver\",\"ygg\":{\"token\":\"at\",\"extra\":{\"userName\":\"steve\",\"clientToken\":\"ct\"}}}")
                               .object();
         AccountData loaded;
         QVERIFY(loaded.resumeStateFromV3(json));
         QCOMPARE(loaded.authlibInjectorUrl, Yggdrasil::ELYBY_API_ROOT);
 
         AccountData legacyEly;
-        QVERIFY(legacyEly.resumeStateFromV3(QJsonDocument::fromJson(R"({"type":"Elyby"})").object()));
+        QVERIFY(legacyEly.resumeStateFromV3(QJsonDocument::fromJson("{\"type\":\"Elyby\"}").object()));
         QCOMPARE(legacyEly.authlibInjectorUrl, Yggdrasil::ELYBY_API_ROOT);
 
         AccountData noServer;
-        QVERIFY(!noServer.resumeStateFromV3(QJsonDocument::fromJson(R"({"type":"AuthlibInjector"})").object()));
+        QVERIFY(!noServer.resumeStateFromV3(QJsonDocument::fromJson("{\"type\":\"AuthlibInjector\"}").object()));
     }
 };
 

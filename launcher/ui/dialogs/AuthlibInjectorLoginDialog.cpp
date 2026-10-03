@@ -25,7 +25,7 @@ const std::array s_presets{
     ServerPreset{ QT_TRANSLATE_NOOP("AuthlibInjectorLoginDialog", "LittleSkin"), QStringLiteral("https://littleskin.cn") },
     ServerPreset{ QT_TRANSLATE_NOOP("AuthlibInjectorLoginDialog", "Custom server"), QString() },
 };
-constexpr int CUSTOM_PRESET = std::tuple_size_v<decltype(s_presets)> - 1;
+constexpr int CUSTOM_PRESET = static_cast<int>(std::tuple_size_v<decltype(s_presets)>) - 1;
 
 bool isPresetUrl(const QString& url)
 {
@@ -194,7 +194,7 @@ void AuthlibInjectorLoginDialog::onSelectProfile(const QStringList& names, int* 
     bool ok = false;
     const auto name = QInputDialog::getItem(this, tr("Choose a character"), tr("This account has several characters. Which one do you want to use?"),
                                             names, 0, false, &ok);
-    *chosenIndex = ok ? names.indexOf(name) : -1;
+    *chosenIndex = ok ? static_cast<int>(names.indexOf(name)) : -1;
 }
 
 void AuthlibInjectorLoginDialog::onTwoFactorRequired()
@@ -221,10 +221,10 @@ MinecraftAccountPtr AuthlibInjectorLoginDialog::newAccount(QWidget* parent, cons
     dialog.ui->messageLabel->setText(message);
 
     if (reauth) {
-        auto* data = reauth->accountData();
+        auto* reauthData = reauth->accountData();
         dialog.ui->presetComboBox->setCurrentIndex(CUSTOM_PRESET);
-        dialog.ui->serverTextBox->setText(data->authlibInjectorUrl);
-        dialog.ui->usernameTextBox->setText(data->userName());
+        dialog.ui->serverTextBox->setText(reauthData->authlibInjectorUrl);
+        dialog.ui->usernameTextBox->setText(reauthData->userName());
         dialog.ui->passwordTextBox->setFocus();
     }
 
