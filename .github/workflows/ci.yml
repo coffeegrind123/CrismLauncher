@@ -671,15 +671,21 @@ jobs:
           [![Build Status](https://github.com/${{ github.repository }}/actions/workflows/ci.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/ci.yml)
           [![Latest Release](https://img.shields.io/github/v/release/${{ github.repository }})](https://github.com/${{ github.repository }}/releases/latest)
 
-          A Prism Launcher fork with modified mod downloading behavior to bypass blocked mod restrictions.
+          A Prism Launcher fork that installs blocked mods automatically, plays without a Microsoft account, and logs in to third-party authentication servers. Rebased on upstream `develop` and synced daily.
 
           ## Changes from Upstream
 
-          **Mod Download Modifications:**
-          - Bypasses "blocked mods" dialog for CurseForge/Flame modpacks
-          - Automatically generates download URLs for mods that lack official third-party download links
-          - Treats ATLauncher browser-required downloads as direct downloads
-          - Allows automatic installation of previously restricted mods
+          **Mod downloads**
+          - CurseForge, FTB and ATLauncher modpacks install mods whose authors disabled third-party downloads, straight from CurseForge's file server
+          - OptiFine in ATLauncher packs downloads automatically from optifine.net, with the BMCLAPI mirror as a fallback
+          - Every such file is still checked against the checksum in the pack; the "blocked mods" dialog only remains for files hosted on forums or personal sites
+
+          **Accounts**
+          - Offline accounts work without owning Minecraft or adding a Microsoft account, and game files download without any account
+          - authlib-injector accounts: log in to Ely.by, LittleSkin, Blessing Skin, Drasl or any Yggdrasil-compatible server (Accounts → Add authlib-injector). The agent is downloaded, verified and injected automatically, and skins can be changed where the server allows it. Fjord Launcher account files load as-is
+
+          **Download mirror**
+          - Optional (Settings → Services): fetch Minecraft, libraries, assets, Java, Forge and NeoForge from BMCLAPI or a compatible mirror, falling back to the official servers on any failure. Mirrored files are verified against the official checksums
 
           ### Latest Builds
 
