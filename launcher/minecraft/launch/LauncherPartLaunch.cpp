@@ -81,7 +81,7 @@ void LauncherPartLaunch::executeTask()
     auto* instance = m_parent->instance();
 
     QString legacyJarPath;
-    if (instance->getLauncher() == "legacy" || instance->shouldApplyOnlineFixes()) {
+    if (instance->getLauncher() == "legacy" || instance->shouldApplyOnlineFixes(m_session)) {
         legacyJarPath = APPLICATION->getJarPath("NewLaunchLegacy.jar");
         if (legacyJarPath.isEmpty()) {
             const char* reason = QT_TR_NOOP("Legacy launcher library could not be found. Please check your installation.");
@@ -92,7 +92,9 @@ void LauncherPartLaunch::executeTask()
     }
 
     m_launchScript = instance->createLaunchScript(m_session, m_targetToJoin);
-    QStringList args = instance->javaArguments();
+    // agents first, so the user's own JVM arguments can't keep them from loading
+    QStringList args = instance->authArguments(m_session);
+    args.append(instance->javaArguments());
     QString allArgs = args.join(" ");
     emit logLine("Java arguments:\n  " + m_parent->censorPrivateInfo(allArgs) + "\n", MessageLevel::Launcher);
 

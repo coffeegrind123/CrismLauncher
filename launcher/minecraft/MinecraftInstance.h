@@ -129,8 +129,11 @@ class MinecraftInstance : public BaseInstance {
     QString createLaunchScript(AuthSessionPtr session, MinecraftTarget::Ptr targetToJoin);
     /// get arguments passed to java
     QStringList javaArguments();
+    /// JVM arguments the account's session needs, e.g. the authlib-injector agent
+    QStringList authArguments(AuthSessionPtr session) const;
     QString getLauncher();
-    bool shouldApplyOnlineFixes();
+    /// the legacy skin/auth fixes, which authlib-injector replaces for sessions on Yggdrasil servers
+    bool shouldApplyOnlineFixes(AuthSessionPtr session = nullptr);
 
     /// get variables for launch command variable substitution/environment
     QMap<QString, QString> getVariables() override;

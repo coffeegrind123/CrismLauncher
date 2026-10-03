@@ -57,7 +57,9 @@
 
 #include "minecraft/auth/AccountList.h"
 #include "minecraft/launch/AutoInstallJava.h"
+#include "minecraft/auth/Yggdrasil.h"
 #include "minecraft/launch/ClaimAccount.h"
+#include "minecraft/launch/EnsureAuthlibInjector.h"
 #include "minecraft/launch/CreateGameFolders.h"
 #include "minecraft/launch/EnsureAvailableMemory.h"
 #include "minecraft/launch/EnsureOfflineLibraries.h"
@@ -672,9 +674,20 @@ QString MinecraftInstance::getLauncher()
     return "standard";
 }
 
-bool MinecraftInstance::shouldApplyOnlineFixes()
+bool MinecraftInstance::shouldApplyOnlineFixes(AuthSessionPtr session)
 {
+    if (session && session->usesAuthlibInjector()) {
+        return false;
+    }
     return traits().contains("legacyServices") && settings()->get("OnlineFixes").toBool();
+}
+
+QStringList MinecraftInstance::authArguments(AuthSessionPtr session) const
+{
+    if (!session || !session->usesAuthlibInjector() || session->authlib_injector_jar.isEmpty()) {
+        return {};
+    }
+    return Yggdrasil::agentArguments(session->authlib_injector_jar, session->authlib_injector_url, session->authlib_injector_metadata);
 }
 
 QMap<QString, QString> MinecraftInstance::getVariables()
@@ -907,7 +920,7 @@ QString MinecraftInstance::createLaunchScript(AuthSessionPtr session, MinecraftT
         launchScript += "traits " + trait + "\n";
     }
 
-    if (shouldApplyOnlineFixes())
+    if (shouldApplyOnlineFixes(session))
         launchScript += "onlineFixes true\n";
 
     launchScript += "launcher " + getLauncher() + "\n";
@@ -1068,6 +1081,8 @@ QMap<QString, QString> MinecraftInstance::createCensorFilterFromSession(AuthSess
         addToFilter(sessionRef.access_token, tr("<ACCESS TOKEN>"));
     }
     addToFilter(sessionRef.uuid, tr("<PROFILE ID>"));
+    // not secret, but a few kilobytes of base64 would drown the logged Java arguments
+    addToFilter(sessionRef.authlib_injector_metadata, tr("<YGGDRASIL METADATA>"));
 
     return filter;
 }
@@ -1222,6 +1237,9 @@ LaunchTask* MinecraftInstance::createLaunchTask(AuthSessionPtr session, Minecraf
     // if we aren't in offline mode
     if (session->launchMode != LaunchMode::Offline) {
         process->appendStep(makeShared<ClaimAccount>(pptr, session));
+        if (session->usesAuthlibInjector()) {
+            process->appendStep(makeShared<EnsureAuthlibInjector>(pptr, session));
+        }
         for (auto t : createUpdateTask()) {
             process->appendStep(makeShared<TaskStepWrapper>(pptr, t));
         }
