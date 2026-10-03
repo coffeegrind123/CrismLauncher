@@ -27,6 +27,7 @@ on:
 
       # Workflows
       - ".github/workflows/build.yml"
+      - ".github/workflows/ci.yml"
       - ".github/actions/package/**"
       - ".github/actions/setup-dependencies/**"
   pull_request:
@@ -51,6 +52,7 @@ on:
 
       # Workflows
       - ".github/workflows/build.yml"
+      - ".github/workflows/ci.yml"
       - ".github/actions/package/**"
       - ".github/actions/setup-dependencies/**"
   workflow_dispatch:
@@ -60,37 +62,44 @@ jobs:
     name: Build (${{ matrix.artifact-name }})
 
     permissions:
+      contents: read
       # Required for vcpkg binary cache
       packages: write
 
+    # Runners, presets and Qt version track upstream's build.yml. Upstream dropped MinGW on
+    # arm64 (install-qt only ships an x64 llvm-mingw Qt), so arm64 Windows is built with MSVC.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             artifact-name: Linux
-            base-cmake-preset: linux
+            cmake-preset: linux
+            qt-version: 6.11.2
 
           - os: ubuntu-24.04-arm
             artifact-name: Linux-aarch64
-            base-cmake-preset: linux
+            cmake-preset: linux
+            qt-version: 6.11.2
 
           - os: windows-2022
             artifact-name: Windows-MinGW-w64
-            base-cmake-preset: windows_mingw
+            cmake-preset: windows_mingw
             msystem: CLANG64
             vcvars-arch: amd64_x86
+            qt-version: 6.11.2
 
           - os: windows-11-arm
-            artifact-name: Windows-MinGW-arm64
-            base-cmake-preset: windows_mingw
-            msystem: CLANGARM64
+            artifact-name: Windows-MSVC-arm64
+            cmake-preset: windows_msvc
             vcvars-arch: arm64
+            qt-version: 6.11.2
 
-          - os: macos-14
+          - os: macos-26
             artifact-name: macOS
-            base-cmake-preset: macos
-            macosx-deployment-target: 12.0
+            cmake-preset: macos_universal
+            macosx-deployment-target: 13.0
+            qt-version: 6.11.2
 
     runs-on: ${{ matrix.os }}
 
@@ -99,6 +108,11 @@ jobs:
         shell: ${{ matrix.msystem != '' && 'msys2 {0}' || 'bash' }}
 
     env:
+      ARTIFACT_NAME: ${{ matrix.artifact-name }}-Qt6
+      BUILD_PLATFORM: official
+      BUILD_TYPE: Release
+      CMAKE_PRESET: ${{ matrix.cmake-preset }}
+
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx-deployment-target }}
 
     steps:
@@ -107,7 +121,7 @@ jobs:
       ##
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -115,31 +129,15 @@ jobs:
       # API KEY RETRIEVAL AND PATCHING
       ##
 
-      - name: Replace CMakeLists.txt with upstream version
+      - name: Verify API keys
         shell: bash
         run: |
-          echo "🔄 Replacing CMakeLists.txt with upstream version..."
-          
-          # Backup original (for debugging if needed)
-          cp CMakeLists.txt CMakeLists.txt.backup
-          
-          # Download and replace with upstream CMakeLists.txt
-          curl -fsSL -o CMakeLists.txt "https://raw.githubusercontent.com/PrismLauncher/PrismLauncher/refs/heads/develop/CMakeLists.txt"
-          
-          if [ ! -f CMakeLists.txt ]; then
-            echo "❌ Failed to download upstream CMakeLists.txt"
-            exit 1
-          fi
-          
-          echo "✅ Successfully replaced CMakeLists.txt with upstream version"
-          
-          # Verify the API keys are present
           echo "🔍 Verifying API keys are present..."
           
           if grep -q 'set(Launcher_MSA_CLIENT_ID' CMakeLists.txt && \
              grep -q 'set(Launcher_CURSEFORGE_API_KEY' CMakeLists.txt && \
              grep -q 'set(Launcher_IMGUR_CLIENT_ID' CMakeLists.txt; then
-            echo "✅ All API keys found in upstream CMakeLists.txt"
+            echo "✅ All API keys found in CMakeLists.txt"
             
             # Show what we got (first 20 chars for verification)
             echo "📝 API Keys found:"
@@ -151,7 +149,7 @@ jobs:
               echo "  • Sparkle Key: $(grep 'set(MACOSX_SPARKLE_UPDATE_PUBLIC_KEY' CMakeLists.txt | sed 's/.*"\([^"]*\)".*/\1/' | cut -c1-20)..."
             fi
           else
-            echo "❌ Some API keys missing from upstream CMakeLists.txt"
+            echo "❌ Some API keys missing from CMakeLists.txt"
             exit 1
           fi
 
@@ -159,34 +157,33 @@ jobs:
         id: setup-dependencies
         uses: ./.github/actions/setup-dependencies
         with:
-          build-type: Release
+          build-type: ${{ env.BUILD_TYPE }}
           artifact-name: ${{ matrix.artifact-name }}
           msystem: ${{ matrix.msystem }}
           vcvars-arch: ${{ matrix.vcvars-arch }}
-          qt-architecture: ${{ matrix.qt-architecture }}
+          qt-version: ${{ matrix.qt-version }}
 
       ##
       # BUILD
       ##
 
-      - name: Get CMake preset
-        id: cmake-preset
-        env:
-          BASE_CMAKE_PRESET: ${{ matrix.base-cmake-preset }}
-          PRESET_TYPE: ci
+      # Launcher_UPDATER_GITHUB_REPO is a cache variable; it has to go in at configure time
+      - name: Configure project
         run: |
-          echo preset="$BASE_CMAKE_PRESET"_"$PRESET_TYPE" >> "$GITHUB_OUTPUT"
+          cmake --preset "$CMAKE_PRESET" \
+            -D VCPKG_HOST_TRIPLET="$VCPKG_TRIPLET" \
+            -D VCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
+            -D Launcher_UPDATER_GITHUB_REPO="https://github.com/${{ github.repository }}"
 
-      - name: Run CMake workflow
-        env:
-          CMAKE_PRESET: ${{ steps.cmake-preset.outputs.preset }}
-          ARTIFACT_NAME: ${{ matrix.artifact-name }}-Qt6
-          BUILD_PLATFORM: official
-          Launcher_UPDATER_GITHUB_REPO: "https://github.com/${{ github.repository }}"
+      - name: Run build
         run: |
-          echo "🏗️ Starting CMake build with upstream API keys..."
-          echo "🔄 Using repository: ${{ github.repository }}"
-          cmake --workflow --preset "$CMAKE_PRESET"
+          cmake --build --preset "$CMAKE_PRESET" --config "$BUILD_TYPE"
+
+      - name: Run tests
+        env:
+          MSYS2_PATH_TYPE: inherit
+        run: |
+          ctest --preset "$CMAKE_PRESET" --build-config "$BUILD_TYPE"
 
       ##
       # PACKAGE
@@ -207,9 +204,8 @@ jobs:
         uses: ./.github/actions/package/linux
         with:
           version: ${{ steps.version-info.outputs.version }}
-          build-type: Release
+          build-type: ${{ steps.setup-dependencies.outputs.build-type }}
           artifact-name: ${{ matrix.artifact-name }}
-          cmake-preset: ${{ steps.cmake-preset.outputs.preset }}
           qt-version: ${{ steps.setup-dependencies.outputs.qt-version }}
 
       - name: Package (macOS)
@@ -217,7 +213,7 @@ jobs:
         uses: ./.github/actions/package/macos
         with:
           version: ${{ steps.version-info.outputs.version }}
-          build-type: Release
+          build-type: ${{ steps.setup-dependencies.outputs.build-type }}
           artifact-name: ${{ matrix.artifact-name }}
 
       - name: Package (Windows)
@@ -225,9 +221,14 @@ jobs:
         uses: ./.github/actions/package/windows
         with:
           version: ${{ steps.version-info.outputs.version }}
-          build-type: Release
+          build-type: ${{ steps.setup-dependencies.outputs.build-type }}
           artifact-name: ${{ matrix.artifact-name }}
           msystem: ${{ matrix.msystem }}
+
+          # No signing identity on this fork; empty values make the action skip Azure signing
+          azure-client-id: ""
+          azure-tenant-id: ""
+          azure-subscription-id: ""
 
       - name: Prepare release artifacts
         shell: bash
@@ -304,24 +305,24 @@ jobs:
                 done
               fi
               ;;
-            "Windows-MinGW-arm64")
+            "Windows-MSVC-arm64")
               if ls *Portable*.zip 1> /dev/null 2>&1; then
                 for file in *Portable*.zip; do
-                  cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-arm64-Portable-${{ steps.version-info.outputs.version }}.zip"
-                  echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-arm64-Portable-${{ steps.version-info.outputs.version }}.zip"
+                  cp "$file" "release-artifacts/PrismLauncher-Windows-MSVC-arm64-Portable-${{ steps.version-info.outputs.version }}.zip"
+                  echo "✅ Copied: $file → PrismLauncher-Windows-MSVC-arm64-Portable-${{ steps.version-info.outputs.version }}.zip"
                 done
               fi
               if ls *Setup*.exe 1> /dev/null 2>&1; then
                 for file in *Setup*.exe; do
-                  cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-arm64-Setup-${{ steps.version-info.outputs.version }}.exe"
-                  echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-arm64-Setup-${{ steps.version-info.outputs.version }}.exe"
+                  cp "$file" "release-artifacts/PrismLauncher-Windows-MSVC-arm64-Setup-${{ steps.version-info.outputs.version }}.exe"
+                  echo "✅ Copied: $file → PrismLauncher-Windows-MSVC-arm64-Setup-${{ steps.version-info.outputs.version }}.exe"
                 done
               fi
               if ls PrismLauncher-Windows-*.zip 1> /dev/null 2>&1; then
                 for file in PrismLauncher-Windows-*.zip; do
                   if [[ ! "$file" =~ Portable ]]; then
-                    cp "$file" "release-artifacts/PrismLauncher-Windows-MinGW-arm64-${{ steps.version-info.outputs.version }}.zip"
-                    echo "✅ Copied: $file → PrismLauncher-Windows-MinGW-arm64-${{ steps.version-info.outputs.version }}.zip"
+                    cp "$file" "release-artifacts/PrismLauncher-Windows-MSVC-arm64-${{ steps.version-info.outputs.version }}.zip"
+                    echo "✅ Copied: $file → PrismLauncher-Windows-MSVC-arm64-${{ steps.version-info.outputs.version }}.zip"
                   fi
                 done
               fi
@@ -363,8 +364,8 @@ jobs:
             "Windows-MinGW-w64")
               PROPER_NAME="PrismLauncher-Windows-MinGW-w64-${{ steps.version-info.outputs.version }}"
               ;;
-            "Windows-MinGW-arm64")
-              PROPER_NAME="PrismLauncher-Windows-MinGW-arm64-${{ steps.version-info.outputs.version }}"
+            "Windows-MSVC-arm64")
+              PROPER_NAME="PrismLauncher-Windows-MSVC-arm64-${{ steps.version-info.outputs.version }}"
               ;;
             "macOS")
               PROPER_NAME="PrismLauncher-macOS-${{ steps.version-info.outputs.version }}"
@@ -384,7 +385,7 @@ jobs:
             "timestamp": "${{ steps.version-info.outputs.timestamp }}",
             "tag": "${{ steps.version-info.outputs.tag }}",
             "os": "${{ matrix.os }}",
-            "cmake_preset": "${{ steps.cmake-preset.outputs.preset }}",
+            "cmake_preset": "${{ matrix.cmake-preset }}",
             "api_keys_source": "upstream_prism_launcher",
             "api_keys_updated": "$(date -u +%Y-%m-%d_%H:%M:%S)",
             "workflow_run_id": "${{ github.run_id }}",
@@ -393,14 +394,14 @@ jobs:
           EOF
 
       - name: Upload build metadata
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-metadata-${{ matrix.artifact-name }}
           path: build-metadata/${{ matrix.artifact-name }}.json
 
       # Upload release artifacts with proper naming
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.artifact-name }}
           path: release-artifacts/*
@@ -419,7 +420,7 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Get version info
         id: version-info
@@ -436,7 +437,7 @@ jobs:
         run: mkdir -p release-assets
 
       - name: Download all release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: release-assets
@@ -597,12 +598,12 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download build metadata
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: build-metadata-*
           path: build-metadata
@@ -829,12 +830,12 @@ jobs:
                       fi
                     fi
                     ;;
-                  "Windows-MinGW-arm64")
+                  "Windows-MSVC-arm64")
                     echo "    → Processing Windows ARM64 platform"
-                    DISPLAY_NAME="Windows MinGW ARM64"
+                    DISPLAY_NAME="Windows MSVC ARM64"
                     # Look for setup exe and portable zip only
-                    SETUP_EXE=$(grep "PrismLauncher-Windows-MinGW-arm64-Setup.*\.exe" assets_list.txt 2>/dev/null | head -1)
-                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MinGW-arm64-Portable.*\.zip" assets_list.txt 2>/dev/null | head -1)
+                    SETUP_EXE=$(grep "PrismLauncher-Windows-MSVC-arm64-Setup.*\.exe" assets_list.txt 2>/dev/null | head -1)
+                    PORTABLE_ZIP=$(grep "PrismLauncher-Windows-MSVC-arm64-Portable.*\.zip" assets_list.txt 2>/dev/null | head -1)
                     
                     echo "    → Found: SETUP='$SETUP_EXE', PORTABLE='$PORTABLE_ZIP'"
                     
