@@ -149,7 +149,7 @@ class DownloadMirrorTest : public QObject {
         const QUrl modrinth("https://api.modrinth.com/v2/project/x");
         const QUrl curseForge("https://api.curseforge.com/v1/mods/1");
 
-        Config config;
+        Net::DownloadMirror::Config config;
         QVERIFY(!rewriteMcim(modrinth, config, Verb::Get, false));
         QVERIFY(!rewriteMcim(curseForge, config, Verb::Get, false));
 
@@ -190,7 +190,7 @@ class DownloadMirrorTest : public QObject {
         const QUrl library("https://libraries.minecraft.net/a/b.jar");
         const QUrl modrinthApi("https://api.modrinth.com/v2/project/x");
 
-        Config config;
+        Net::DownloadMirror::Config config;
         QVERIFY(!Net::DownloadMirror::choose(library, config, Verb::Get, true));
         QVERIFY(!Net::DownloadMirror::choose(modrinthApi, config, Verb::Get, false));
 
@@ -218,7 +218,7 @@ class DownloadMirrorTest : public QObject {
     void chooseSkipsDisabledMirror()
     {
         using namespace Net::DownloadMirror;
-        Config config;
+        Net::DownloadMirror::Config config;
         config.mode = Mode::PreferMirror;
         config.base = QUrl(DEFAULT_BASE_URL);
         config.modrinth = ModPlatformMirror::Mcim;
