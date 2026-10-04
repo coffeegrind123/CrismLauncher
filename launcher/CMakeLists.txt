@@ -866,6 +866,7 @@ SET(LAUNCHER_SOURCES
     ui/setupwizard/AutoJavaWizardPage.h
     ui/setupwizard/LoginWizardPage.cpp
     ui/setupwizard/LoginWizardPage.h
+    ui/setupwizard/MirrorWizardPage.h
 
     # GUI - themes
     ui/themes/FusionTheme.cpp

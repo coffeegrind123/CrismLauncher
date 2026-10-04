@@ -71,6 +71,7 @@
 #include "ui/setupwizard/JavaWizardPage.h"
 #include "ui/setupwizard/LanguageWizardPage.h"
 #include "ui/setupwizard/LoginWizardPage.h"
+#include "ui/setupwizard/MirrorWizardPage.h"
 #include "ui/setupwizard/PasteWizardPage.h"
 #include "ui/setupwizard/SetupWizard.h"
 #include "ui/setupwizard/ThemeWizardPage.h"
@@ -906,6 +907,9 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
                 m_settings->reset(mirrorMode->id());
             }
 
+            // set once the setup wizard has shown the mirror page
+            m_settings->registerSetting("UserAskedAboutMirrors", false);
+
             // MCIM mirror for the Modrinth and CurseForge APIs and files: 0 official, 1 MCIM
             for (const auto* id : { "ModrinthMirror", "CurseForgeMirror" }) {
                 auto platformMirror = m_settings->registerSetting(id, 0);
@@ -1293,8 +1297,10 @@ bool Application::createSetupWizard()
     bool validIcons = m_themeManager->isValidIconTheme(settings()->get("IconTheme").toString());
     // Offline and authlib-injector accounts need no Microsoft client ID, so the login page is always useful
     bool login = !m_accounts->anyAccountIsValid();
+    bool askMirrors = !settings()->get("UserAskedAboutMirrors").toBool();
     bool themeInterventionRequired = !validWidgets || !validIcons;
-    bool wizardRequired = javaRequired || languageRequired || pasteInterventionRequired || themeInterventionRequired || askjava || login;
+    bool wizardRequired =
+        javaRequired || languageRequired || pasteInterventionRequired || themeInterventionRequired || askjava || login || askMirrors;
     if (wizardRequired) {
         // set default theme after going into theme wizard
         if (!validIcons) {
@@ -1334,6 +1340,10 @@ bool Application::createSetupWizard()
 
         if (login) {
             setupWizard.addPage(new LoginWizardPage(&setupWizard));
+        }
+
+        if (askMirrors) {
+            setupWizard.addPage(new MirrorWizardPage(&setupWizard));
         }
         if (setupWizard.exec() != QDialog::Accepted) {
             qWarning() << "Setup wizard was not completed; continuing with the current settings";

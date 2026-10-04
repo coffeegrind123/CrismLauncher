@@ -29,6 +29,7 @@
 **Download mirrors**
 - Optional (Settings → Services): fetch Minecraft, libraries, assets, Java, Forge and NeoForge from BMCLAPI or a compatible mirror, falling back to the official servers on any failure. Mirrored files are verified against the official checksums
 - Optional, per platform: Modrinth and CurseForge search, update checks and mod files through the MCIM cache, falling back to the official servers. API keys are never sent to it
+- The first-start setup ends with a page for both (defaults: official servers)
 
 **Updates**
 - The built-in updater (Sparkle on macOS) follows this fork's releases, not upstream Prism's
