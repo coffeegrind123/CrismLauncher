@@ -50,7 +50,17 @@ bool NewsEntry::fromXmlElement(const QDomElement& element, NewsEntry* entry, [[m
 {
     QString title = childValue(element, "title", tr("Untitled"));
     QString content = childValue(element, "content", tr("No content."));
+    // Atom's <id> is only a URL on some feeds (GitHub's are "tag:" URIs); the page is the <link> element
     QString link = childValue(element, "id");
+    const auto links = element.elementsByTagName("link");
+    for (int i = 0; i < links.count(); i++) {
+        const auto linkElement = links.at(i).toElement();
+        const auto rel = linkElement.attribute("rel", "alternate");
+        if (rel == "alternate" && linkElement.hasAttribute("href")) {
+            link = linkElement.attribute("href");
+            break;
+        }
+    }
 
     entry->title = title;
     entry->content = content;
