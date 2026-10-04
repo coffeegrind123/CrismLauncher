@@ -481,6 +481,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # The logo is regenerated from upstream's icon on each release, so it follows any upstream redesign
+      - name: Generate logo
+        run: python3 scripts/rebrand/rebrand.py --readme-logo .github/assets/crism-logo.svg
+
       - name: Generate README
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -500,12 +504,21 @@ jobs:
           }
 
           cat > README.md <<'HEADER'
-          # Crism Launcher
+          <p align="center">
+            <img src=".github/assets/crism-logo.svg" alt="Crism Launcher logo" width="128" height="128">
+          </p>
 
-          [![Build Status](https://github.com/${{ github.repository }}/actions/workflows/ci.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/ci.yml)
-          [![Latest Release](https://img.shields.io/github/v/release/${{ github.repository }})](https://github.com/${{ github.repository }}/releases/latest)
+          <h1 align="center">Crism Launcher</h1>
 
-          A Prism Launcher fork that installs blocked mods automatically, plays without a Microsoft account, and logs in to third-party authentication servers. Rebased on upstream `develop` and synced daily.
+          <p align="center">
+            <a href="https://github.com/${{ github.repository }}/actions/workflows/ci.yml"><img src="https://github.com/${{ github.repository }}/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
+            <a href="https://github.com/${{ github.repository }}/releases/latest"><img src="https://img.shields.io/github/v/release/${{ github.repository }}?color=c2185b" alt="Latest Release"></a>
+            <a href="https://github.com/${{ github.repository }}/releases/latest"><img src="https://img.shields.io/github/downloads/${{ github.repository }}/total?color=c2185b" alt="Downloads"></a>
+          </p>
+
+          <p align="center">
+            A Minecraft launcher forked from <a href="https://github.com/PrismLauncher/PrismLauncher">Prism Launcher</a> that installs blocked mods automatically, plays without a Microsoft account, and logs in to third-party authentication servers. Rebased on upstream <code>develop</code> and synced daily.
+          </p>
 
           ## Changes from Upstream
 
@@ -549,11 +562,11 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          if git diff --quiet README.md; then
-            echo "README.md unchanged"
+          git add README.md .github/assets/crism-logo.svg
+          if git diff --cached --quiet; then
+            echo "README.md and logo unchanged"
             exit 0
           fi
-          git add README.md
           git commit -m "🤖 Auto-update README.md with release download links" -m "[skip ci]"
           git pull --rebase --quiet origin "${GITHUB_REF_NAME}"
           git push
