@@ -50,6 +50,7 @@
 #include "minecraft/MinecraftInstance.h"
 #include "minecraft/PackProfile.h"
 
+#include "modplatform/helpers/HashUtils.h"
 #include "modplatform/helpers/OverrideUtils.h"
 
 #include "settings/INISettingsObject.h"
@@ -67,6 +68,7 @@
 #include "minecraft/World.h"
 #include "minecraft/mod/tasks/LocalResourceParse.h"
 #include "net/ApiRequest.h"
+#include "net/ChecksumValidator.h"
 #include "ui/dialogs/UntrustedModsDialog.h"
 #include "ui/pages/modplatform/OptionalModDialog.h"
 
@@ -638,6 +640,19 @@ void FlameCreationTask::setupDownloadJob()
         if (!url.isEmpty()) {
             qDebug() << "Will download" << url << "to" << path;
             auto dl = Net::ApiRequest::makeFile(url, path);
+            // CurseForge's hash pins the file, which also lets the MCIM mirror serve it
+            if (!result.version.hash.isEmpty()) {
+                switch (Hashing::algorithmFromString(result.version.hashType)) {
+                    case Hashing::Algorithm::Sha1:
+                        dl->addValidator(new Net::ChecksumValidator(QCryptographicHash::Sha1, result.version.hash));
+                        break;
+                    case Hashing::Algorithm::Md5:
+                        dl->addValidator(new Net::ChecksumValidator(QCryptographicHash::Md5, result.version.hash));
+                        break;
+                    default:
+                        break;
+                }
+            }
             m_filesJob->addNetAction(dl);
         }
     }
