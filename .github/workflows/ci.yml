@@ -30,6 +30,7 @@ on:
       - ".github/workflows/ci.yml"
       - ".github/actions/package/**"
       - ".github/actions/setup-dependencies/**"
+      - "scripts/rebrand/**"
   pull_request:
     paths:
       # File types
@@ -55,6 +56,7 @@ on:
       - ".github/workflows/ci.yml"
       - ".github/actions/package/**"
       - ".github/actions/setup-dependencies/**"
+      - "scripts/rebrand/**"
   workflow_dispatch:
 
 # One release run at a time: each run deletes and recreates the release, so overlapping runs race.
@@ -171,6 +173,20 @@ jobs:
             fi
           done
 
+      # The repository keeps upstream's names so the daily merge stays clean; the build is renamed here, before
+      # anything reads the sources. See context/branding.md.
+      - name: Set up Python for rebranding
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Rebrand as Crism Launcher
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check --quiet pillow
+          python -m unittest discover -s scripts/rebrand
+          python scripts/rebrand/rebrand.py
+
       - name: Setup dependencies
         id: setup-dependencies
         uses: ./.github/actions/setup-dependencies
@@ -207,6 +223,7 @@ jobs:
             -D Launcher_NEWS_RSS_URL="https://github.com/${{ github.repository }}/releases.atom" \
             -D Launcher_NEWS_OPEN_URL="https://github.com/${{ github.repository }}/releases" \
             -D Launcher_FORK_PATCH_VERSION="${{ needs.version.outputs.patch }}" \
+            -D Launcher_LEGACY_APP_BINARY_NAME=prismlauncher \
             "${extra[@]}"
 
       - name: Run build
@@ -254,9 +271,9 @@ jobs:
           azure-tenant-id: ""
           azure-subscription-id: ""
 
-  # Asset names follow upstream's release.yml exactly: the updater picks assets by platform, architecture, Qt
-  # version and "Portable" in the name, and AppImageUpdate looks for PrismLauncher-Linux-<arch>.AppImage.zsync
-  # in the latest release.
+  # Asset names follow upstream's release.yml with the Crism prefix: the updater picks assets by platform,
+  # architecture, Qt version and "Portable" in the name, and AppImageUpdate looks for
+  # CrismLauncher-Linux-<arch>.AppImage.zsync in the latest release.
   create-release:
     name: Create release
     needs: [version, build]
@@ -289,15 +306,15 @@ jobs:
           out="${{ github.workspace }}/release"
           mkdir -p "$out"
 
-          mv PrismLauncher-Linux-Qt6-Portable*/PrismLauncher-portable.tar.gz "$out/PrismLauncher-Linux-Qt6-Portable-$VERSION.tar.gz"
-          mv PrismLauncher-Linux-aarch64-Qt6-Portable*/PrismLauncher-portable.tar.gz "$out/PrismLauncher-Linux-aarch64-Qt6-Portable-$VERSION.tar.gz"
+          mv CrismLauncher-Linux-Qt6-Portable*/CrismLauncher-portable.tar.gz "$out/CrismLauncher-Linux-Qt6-Portable-$VERSION.tar.gz"
+          mv CrismLauncher-Linux-aarch64-Qt6-Portable*/CrismLauncher-portable.tar.gz "$out/CrismLauncher-Linux-aarch64-Qt6-Portable-$VERSION.tar.gz"
 
           # Branch builds name the AppImage after the version; the zsync header names the file it describes, so it
           # has to follow the rename or AppImageUpdate would fetch a file that isn't in the release
           for arch in x86_64 aarch64; do
-            appimage="PrismLauncher-Linux-$arch.AppImage"
-            mv PrismLauncher-*-"$arch".AppImage/PrismLauncher-*-"$arch".AppImage "$out/$appimage"
-            mv PrismLauncher-*-"$arch".AppImage.zsync/PrismLauncher-*-"$arch".AppImage.zsync "$out/$appimage.zsync"
+            appimage="CrismLauncher-Linux-$arch.AppImage"
+            mv CrismLauncher-*-"$arch".AppImage/CrismLauncher-*-"$arch".AppImage "$out/$appimage"
+            mv CrismLauncher-*-"$arch".AppImage.zsync/CrismLauncher-*-"$arch".AppImage.zsync "$out/$appimage.zsync"
             python3 - "$out/$appimage.zsync" "$appimage" <<'PY'
           import sys
           path, name = sys.argv[1], sys.argv[2]
@@ -312,19 +329,19 @@ jobs:
             grep -a -m2 -E '^(Filename|URL):' "$out/$appimage.zsync"
           done
 
-          mv PrismLauncher-macOS*/PrismLauncher.zip "$out/PrismLauncher-macOS-$VERSION.zip"
-          mv PrismLauncher-macOS*/PrismLauncher.dmg "$out/PrismLauncher-macOS-$VERSION.dmg"
+          mv CrismLauncher-macOS*/CrismLauncher.zip "$out/CrismLauncher-macOS-$VERSION.zip"
+          mv CrismLauncher-macOS*/CrismLauncher.dmg "$out/CrismLauncher-macOS-$VERSION.dmg"
 
-          for d in PrismLauncher-Windows-*; do
+          for d in CrismLauncher-Windows-*; do
             [ -d "$d" ] || continue
             case "$d" in
-              PrismLauncher-Windows-MinGW-w64*) name="PrismLauncher-Windows-MinGW-w64" ;;
-              PrismLauncher-Windows-MSVC-arm64*) name="PrismLauncher-Windows-MSVC-arm64" ;;
-              PrismLauncher-Windows-MSVC*) name="PrismLauncher-Windows-MSVC" ;;
+              CrismLauncher-Windows-MinGW-w64*) name="CrismLauncher-Windows-MinGW-w64" ;;
+              CrismLauncher-Windows-MSVC-arm64*) name="CrismLauncher-Windows-MSVC-arm64" ;;
+              CrismLauncher-Windows-MSVC*) name="CrismLauncher-Windows-MSVC" ;;
               *) echo "::error::Unexpected Windows artifact $d"; exit 1 ;;
             esac
             case "$d" in
-              *-Setup-*) mv "$d"/PrismLauncher-*.exe "$out/$name-Setup-$VERSION.exe" ;;
+              *-Setup-*) mv "$d"/CrismLauncher-*.exe "$out/$name-Setup-$VERSION.exe" ;;
               *-Portable-*) (cd "$d" && zip -q -r -9 "$out/$name-Portable-$VERSION.zip" .) ;;
               *) (cd "$d" && zip -q -r -9 "$out/$name-$VERSION.zip" .) ;;
             esac
@@ -332,13 +349,18 @@ jobs:
 
           ls -la "$out"
 
-      # Sparkle (macOS) reads this feed from the latest release; the ed25519 signature authenticates the update
+      # Sparkle (macOS) reads this feed from the latest release; the ed25519 signature authenticates the update.
+      # Builds from before the rename can't install this update: Sparkle finds the new app in the archive by the old
+      # app name or bundle id, and both changed. For those versions the item is informational, so Sparkle offers
+      # the release page instead of failing. CRISM_RENAME_VERSION is the first release built renamed; every
+      # earlier release is numbered below it.
       - name: Create Sparkle appcast
         env:
           SPARKLE_ED25519_KEY: ${{ secrets.SPARKLE_ED25519_KEY }}
+          CRISM_RENAME_VERSION: "12.0.32"
         run: |
           set -euo pipefail
-          zip="release/PrismLauncher-macOS-$VERSION.zip"
+          zip="release/CrismLauncher-macOS-$VERSION.zip"
           if [ -z "$SPARKLE_ED25519_KEY" ]; then
             echo "::warning::SPARKLE_ED25519_KEY is not set; macOS builds won't find updates"
             exit 0
@@ -361,7 +383,10 @@ jobs:
                 <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
                 <pubDate>$(date -u -R)</pubDate>
                 <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-                <enclosure sparkle:os="macos" url="https://github.com/${{ github.repository }}/releases/download/$VERSION/PrismLauncher-macOS-$VERSION.zip" length="$(stat -c %s "$zip")" type="application/octet-stream" sparkle:edSignature="$signature"/>
+                <sparkle:informationalUpdate>
+                  <sparkle:belowVersion>$CRISM_RENAME_VERSION</sparkle:belowVersion>
+                </sparkle:informationalUpdate>
+                <enclosure sparkle:os="macos" url="https://github.com/${{ github.repository }}/releases/download/$VERSION/CrismLauncher-macOS-$VERSION.zip" length="$(stat -c %s "$zip")" type="application/octet-stream" sparkle:edSignature="$signature"/>
               </item>
             </channel>
           </rss>
@@ -499,6 +524,10 @@ jobs:
           **Updates**
           - The built-in updater (Sparkle on macOS) follows this fork's releases, not upstream Prism's
 
+          **Branding**
+          - Builds are named Crism Launcher throughout, and keep their data in a `CrismLauncher` folder of their own, separate from Prism Launcher's. Portable installs keep using their own folder
+          - Updating from a build that still said Prism: portable Windows and Linux installs update in place, and old shortcuts keep working. The Windows installer sets up Crism Launcher next to the old install, which can then be uninstalled. On macOS, download the new version once; updates are automatic again from there
+
           ### Latest Builds
 
           | Platform | Download |
@@ -506,11 +535,11 @@ jobs:
           HEADER
 
           {
-            row "Windows x64" '^PrismLauncher-Windows-MinGW-w64-(Setup|Portable)-.*\.(exe|zip)$'
-            row "Windows ARM64" '^PrismLauncher-Windows-MSVC-arm64-(Setup|Portable)-.*\.(exe|zip)$'
-            row "macOS" '^PrismLauncher-macOS-.*\.(dmg|zip)$'
-            row "Linux x86_64" '^PrismLauncher-Linux-(x86_64\.AppImage|Qt6-Portable-.*\.tar\.gz)$'
-            row "Linux ARM64" '^PrismLauncher-Linux-(aarch64\.AppImage|aarch64-Qt6-Portable-.*\.tar\.gz)$'
+            row "Windows x64" '^CrismLauncher-Windows-MinGW-w64-(Setup|Portable)-.*\.(exe|zip)$'
+            row "Windows ARM64" '^CrismLauncher-Windows-MSVC-arm64-(Setup|Portable)-.*\.(exe|zip)$'
+            row "macOS" '^CrismLauncher-macOS-.*\.(dmg|zip)$'
+            row "Linux x86_64" '^CrismLauncher-Linux-(x86_64\.AppImage|Qt6-Portable-.*\.tar\.gz)$'
+            row "Linux ARM64" '^CrismLauncher-Linux-(aarch64\.AppImage|aarch64-Qt6-Portable-.*\.tar\.gz)$'
             printf '\n---\n\n*Last updated: %s*\n' "$(date -u +'%Y-%m-%d %H:%M UTC')"
           } >> README.md
 
