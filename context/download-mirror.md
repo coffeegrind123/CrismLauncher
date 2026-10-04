@@ -26,7 +26,8 @@ URLs with userinfo, a non-default port or `.`/`..` segments are never rewritten.
 
 Any mirror failure (HTTP error incl. 429, timeout, write failure, checksum mismatch, too many redirects) makes the
 same `Request` abort its sink and resend to the original URL; NetJob never sees a failure. 8 consecutive mirror
-failures disable the mirror for the session (`DownloadMirror::isDisabledForSession`). MirrorOnly never falls back;
+failures disable the mirror for the session (`DownloadMirror::isDisabledForSession(Provider::Bmclapi)`); 404s don't
+count. MCIM (`context/mod-api-mirror.md`) uses the same request path with its own counter. MirrorOnly never falls back;
 the Java runtime `manifest.json` fails there because BMCLAPI serves a re-minified copy (different SHA-1).
 
 Every attempt, NetJob retries included, starts again from the requested URL (previously from the last redirect).

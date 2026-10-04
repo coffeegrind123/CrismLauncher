@@ -40,7 +40,6 @@
 #include "ui_APIPage.h"
 
 #include <QFileDialog>
-#include <algorithm>
 #include <QMessageBox>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -50,7 +49,6 @@
 
 #include "Application.h"
 #include "BuildConfig.h"
-#include "net/DownloadMirror.h"
 #include "net/PasteUpload.h"
 #include "settings/SettingsObject.h"
 #include "tools/BaseProfiler.h"
@@ -86,15 +84,6 @@ APIPage::APIPage(QWidget* parent) : QWidget(parent), ui(new Ui::APIPage)
     ui->resourceURL->setPlaceholderText(BuildConfig.DEFAULT_RESOURCE_BASE);
     ui->legacyFMLLibsURL->setPlaceholderText(BuildConfig.LEGACY_FMLLIBS_BASE_URL);
 
-    ui->downloadMirrorMode->addItem(tr("Off: download from the official servers"), static_cast<int>(Net::DownloadMirror::Mode::Off));
-    ui->downloadMirrorMode->addItem(tr("Prefer the mirror, fall back to the official servers"),
-                                    static_cast<int>(Net::DownloadMirror::Mode::PreferMirror));
-    ui->downloadMirrorMode->addItem(tr("Mirror only (fails when the mirror does; Java downloads may not work)"),
-                                    static_cast<int>(Net::DownloadMirror::Mode::MirrorOnly));
-    ui->downloadMirrorURL->setValidator(new QRegularExpressionValidator(s_validUrlRegExp, ui->downloadMirrorURL));
-    ui->downloadMirrorURL->setPlaceholderText(Net::DownloadMirror::DEFAULT_BASE_URL);
-    connect(ui->downloadMirrorMode, &QComboBox::currentIndexChanged, this,
-            [this] { ui->downloadMirrorURL->setEnabled(ui->downloadMirrorMode->currentData().toInt() != 0); });
     ui->userAgentLineEdit->setPlaceholderText(BuildConfig.USER_AGENT);
 
     loadSettings();
@@ -160,9 +149,7 @@ void APIPage::loadSettings()
     ui->resourceURL->setText(resourceURL);
     QString fmlLibsURL = s->get("LegacyFMLLibsURLOverride").toString();
     ui->legacyFMLLibsURL->setText(fmlLibsURL);
-    ui->downloadMirrorMode->setCurrentIndex(std::max(0, ui->downloadMirrorMode->findData(s->get("DownloadMirrorMode").toInt())));
-    ui->downloadMirrorURL->setText(s->get("DownloadMirrorURL").toString());
-    ui->downloadMirrorURL->setEnabled(ui->downloadMirrorMode->currentData().toInt() != 0);
+    ui->mirrorSettings->loadSettings();
     QString flameKey = s->get("FlameKeyOverride").toString();
     ui->flameKey->setText(flameKey);
     QString modrinthToken = s->get("ModrinthToken").toString();
@@ -184,7 +171,6 @@ void APIPage::applySettings()
     QUrl metaURL(ui->metaURL->text());
     QUrl resourceURL(ui->resourceURL->text());
     QUrl fmlLibsURL(ui->legacyFMLLibsURL->text());
-    QUrl downloadMirrorURL(ui->downloadMirrorURL->text());
 
     auto addRequiredTrailingSlash = [](QUrl& url) {
         if (!url.isEmpty() && !url.path().endsWith('/')) {
@@ -196,7 +182,6 @@ void APIPage::applySettings()
     addRequiredTrailingSlash(metaURL);
     addRequiredTrailingSlash(resourceURL);
     addRequiredTrailingSlash(fmlLibsURL);
-    addRequiredTrailingSlash(downloadMirrorURL);
 
     auto isLocalhost = [](const QUrl& url) { return url.host() == "localhost" || url.host() == "127.0.0.1" || url.host() == "::1"; };
     auto isUnsafe = [isLocalhost](const QUrl& url) { return !url.isEmpty() && url.scheme() == "http" && !isLocalhost(url); };
@@ -209,15 +194,13 @@ void APIPage::applySettings()
     upgradeToHTTPS(metaURL);
     upgradeToHTTPS(resourceURL);
     upgradeToHTTPS(fmlLibsURL);
-    upgradeToHTTPS(downloadMirrorURL);
 
     s->set("FallbackMRBlockedMods", ui->FallbackMRBlockedMods->checkState());
     s->set("MetaURLOverride", metaURL.toString());
     s->set("MetaRefreshOnLaunch", ui->metaRefreshOnLaunchCB->checkState() == Qt::Checked);
     s->set("ResourceURLOverride", resourceURL.toString());
     s->set("LegacyFMLLibsURLOverride", fmlLibsURL.toString());
-    s->set("DownloadMirrorMode", ui->downloadMirrorMode->currentData().toInt());
-    s->set("DownloadMirrorURL", downloadMirrorURL.toString());
+    ui->mirrorSettings->applySettings();
     QString flameKey = ui->flameKey->text();
     s->set("FlameKeyOverride", flameKey);
     QString modrinthToken = ui->modrinthToken->text();
@@ -235,4 +218,5 @@ bool APIPage::apply()
 void APIPage::retranslate()
 {
     ui->retranslateUi(this);
+    ui->mirrorSettings->retranslateUi();
 }

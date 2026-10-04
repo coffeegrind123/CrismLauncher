@@ -126,18 +126,19 @@ void Request::executeTask()
     m_url = m_originalUrl;
     m_redirectCount = 0;
     m_errorResponse.clear();
-    m_onMirror = false;
+    m_mirror.reset();
 
-    const auto mirror = DownloadMirror::currentConfig();
-    const bool mirrorUsable = mirror.mode == DownloadMirror::Mode::MirrorOnly ||
-                              (mirror.mode == DownloadMirror::Mode::PreferMirror && !m_mirrorFailed && !DownloadMirror::isDisabledForSession());
-    // Only content pinned by a checksum from official metadata may come from the mirror
-    if (mirrorUsable && m_httpMethod == HttpMethod::Get && m_sink && m_sink->hasContentPin()) {
-        if (const auto mirrored = DownloadMirror::rewrite(m_originalUrl, mirror.base)) {
-            qCDebug(m_logCat) << getUid().toString() << "Using download mirror" << mirrored->toString() << "for" << m_originalUrl.toString();
-            m_url = *mirrored;
-            m_onMirror = true;
-        }
+    // Only content pinned by a checksum from official metadata may come from a file mirror; MCIM
+    // also takes unpinned mod platform API requests
+    const auto verb = m_httpMethod == HttpMethod::Get    ? DownloadMirror::Verb::Get
+                      : m_httpMethod == HttpMethod::Post ? DownloadMirror::Verb::Post
+                                                         : DownloadMirror::Verb::Other;
+    const bool pinned = m_sink && m_sink->hasContentPin();
+    const auto target = DownloadMirror::choose(m_originalUrl, DownloadMirror::currentConfig(), verb, pinned);
+    if (target && !(m_mirrorFailed && target->mayFallBack)) {
+        qCDebug(m_logCat) << getUid().toString() << "Using download mirror" << target->url.toString() << "for" << m_originalUrl.toString();
+        m_url = target->url;
+        m_mirror = *target;
     }
 
     sendRequest();
@@ -179,7 +180,9 @@ void Request::sendRequest()
     }
 
 #ifdef LAUNCHER_APPLICATION
-    auto userAgent = APPLICATION->getUserAgent();
+    // MCIM admits launchers by the "<Name>/<version>" user agent they registered, so a custom one doesn't apply there
+    const bool onMcim = m_mirror && m_mirror->provider == DownloadMirror::Provider::Mcim;
+    auto userAgent = onMcim ? BuildConfig.USER_AGENT : APPLICATION->getUserAgent();
 #else
     auto userAgent = BuildConfig.USER_AGENT;
 #endif
@@ -459,8 +462,8 @@ void Request::downloadFinished()
         return;
     }
 
-    if (m_onMirror) {
-        DownloadMirror::reportSuccess();
+    if (m_mirror) {
+        DownloadMirror::reportSuccess(m_mirror->provider);
     }
     qCDebug(m_logCat) << getUid().toString() << "Request succeeded:" << m_url.toString();
     emitSucceeded();
@@ -487,7 +490,7 @@ void Request::downloadReadyRead()
 
 bool Request::mayFallBackFromMirror() const
 {
-    return m_onMirror && DownloadMirror::currentConfig().mode == DownloadMirror::Mode::PreferMirror;
+    return m_mirror && m_mirror->mayFallBack;
 }
 
 bool Request::tryMirrorFallback(const QString& reason)
@@ -498,12 +501,14 @@ bool Request::tryMirrorFallback(const QString& reason)
 
     qCWarning(m_logCat) << getUid().toString() << "Download mirror failed for" << m_originalUrl.toString() << "(" << reason
                         << "), retrying the original URL";
-    DownloadMirror::reportFailure();
+    if (replyStatusCode() != 404) {
+        DownloadMirror::reportFailure(m_mirror->provider);
+    }
 
     // Discard the mirror's partial output; the sink starts over on the next init()
     m_sink->abort();
     m_mirrorFailed = true;
-    m_onMirror = false;
+    m_mirror.reset();
     m_state = State::Running;
 
     // This runs inside the old reply's finished signal, so let Qt delete it afterwards

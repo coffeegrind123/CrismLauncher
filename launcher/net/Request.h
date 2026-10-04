@@ -47,9 +47,11 @@
 #include <cstdint>
 #include <expected>
 #include <functional>
+#include <optional>
 #include <utility>
 #include <variant>
 
+#include "DownloadMirror.h"
 #include "EnumWrapper.h"
 #include "HeaderProxy.h"
 #include "HttpMetaCache.h"
@@ -196,9 +198,9 @@ class Request : public Task {
     QUrl m_url;
     QUrl m_originalUrl;
 
-    // m_onMirror: the current attempt goes to the download mirror. m_mirrorFailed: the mirror
+    // m_mirror: the mirror the current attempt goes to, if any. m_mirrorFailed: the mirror
     // failed this request once, so retries go straight to the original URL
-    bool m_onMirror = false;
+    std::optional<DownloadMirror::Target> m_mirror;
     bool m_mirrorFailed = false;
     std::vector<std::unique_ptr<Net::HeaderProxy>> m_headerProxies;
 

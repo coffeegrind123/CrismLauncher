@@ -905,6 +905,14 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
             if (const auto mode = mirrorMode->get().toInt(); mode < 0 || mode > 2) {
                 m_settings->reset(mirrorMode->id());
             }
+
+            // MCIM mirror for the Modrinth and CurseForge APIs and files: 0 official, 1 MCIM
+            for (const auto* id : { "ModrinthMirror", "CurseForgeMirror" }) {
+                auto platformMirror = m_settings->registerSetting(id, 0);
+                if (const auto value = platformMirror->get().toInt(); value < 0 || value > 1) {
+                    m_settings->reset(platformMirror->id());
+                }
+            }
         }
 
         m_settings->registerSetting("MetaRefreshOnLaunch", true);

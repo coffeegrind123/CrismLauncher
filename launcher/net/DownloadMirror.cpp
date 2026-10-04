@@ -3,6 +3,7 @@
 #include <QStringList>
 
 #include <array>
+#include <cstddef>
 
 #ifdef LAUNCHER_APPLICATION
 #include "Application.h"
@@ -32,8 +33,6 @@ constexpr std::array s_routes{
     Route{ "maven.fabricmc.net", "/", "maven/" },
 };
 
-int s_consecutiveFailures = 0;
-
 bool hasDefaultPort(const QUrl& url)
 {
     return url.port() == -1 || (url.scheme() == "https" && url.port() == 443) || (url.scheme() == "http" && url.port() == 80);
@@ -44,6 +43,49 @@ bool hasDotSegment(const QString& path)
     const auto segments = path.split('/');
     return segments.contains("..") || segments.contains(".");
 }
+
+struct McimRoute {
+    const char* host;
+    const char* pathPrefix;    //!< on the official host, with leading and trailing '/'
+    const char* mirrorPrefix;  //!< replaces pathPrefix under the MCIM root, with trailing '/'
+    ModPlatformMirror Config::* platform;
+    bool needsPin;  //!< file downloads; API responses are what MCIM serves unpinned
+};
+
+// Checked live (2026-10): API answers match the official ones, files are served or redirected
+constexpr std::array s_mcimRoutes{
+    McimRoute{ "api.modrinth.com", "/v2/", "modrinth/v2/", &Config::modrinth, false },
+    McimRoute{ "cdn.modrinth.com", "/data/", "data/", &Config::modrinth, true },
+    McimRoute{ "api.curseforge.com", "/v1/", "curseforge/v1/", &Config::curseForge, false },
+    McimRoute{ "edge.forgecdn.net", "/files/", "files/", &Config::curseForge, true },
+    McimRoute{ "mediafilez.forgecdn.net", "/files/", "files/", &Config::curseForge, true },
+};
+
+std::array<int, 2> s_consecutiveFailures{};
+
+int& failures(Provider provider)
+{
+    return s_consecutiveFailures[static_cast<std::size_t>(provider)];
+}
+
+//! http(s), no userinfo, default port, no dot segments: safe to move under another root
+bool isPlainUrl(const QUrl& url)
+{
+    if (!url.isValid() || (url.scheme() != "https" && url.scheme() != "http")) {
+        return false;
+    }
+    if (!url.userInfo().isEmpty() || !hasDefaultPort(url)) {
+        return false;
+    }
+    return !hasDotSegment(url.path(QUrl::FullyDecoded));
+}
+
+#ifdef LAUNCHER_APPLICATION
+ModPlatformMirror platformSetting(const QVariant& value)
+{
+    return value.toInt() == static_cast<int>(ModPlatformMirror::Mcim) ? ModPlatformMirror::Mcim : ModPlatformMirror::Official;
+}
+#endif
 }  // namespace
 
 std::optional<QUrl> rewrite(const QUrl& original, const QUrl& base)
@@ -83,6 +125,54 @@ std::optional<QUrl> rewrite(const QUrl& original, const QUrl& base)
     return std::nullopt;
 }
 
+std::optional<QUrl> rewriteMcim(const QUrl& original, const Config& config, Verb verb, bool contentPinned)
+{
+    if (verb == Verb::Other || !isPlainUrl(original)) {
+        return std::nullopt;
+    }
+
+    // Work on the encoded path so names like "fabric-api-0.161.2%2B26.4.jar" keep their escapes
+    const auto host = original.host().toLower();
+    const auto path = original.path(QUrl::FullyEncoded);
+    for (const auto& route : s_mcimRoutes) {
+        if (host != QLatin1String(route.host) || !path.startsWith(QLatin1String(route.pathPrefix))) {
+            continue;
+        }
+        if (config.*route.platform != ModPlatformMirror::Mcim) {
+            return std::nullopt;
+        }
+        if (route.needsPin && (verb != Verb::Get || !contentPinned)) {
+            return std::nullopt;
+        }
+
+        const QUrl base(MCIM_BASE_URL);
+        const auto rest = path.mid(static_cast<qsizetype>(qstrlen(route.pathPrefix)));
+        QUrl mirrored(base);
+        mirrored.setPath(base.path() + QLatin1String(route.mirrorPrefix) + rest, QUrl::TolerantMode);
+        mirrored.setQuery(original.query(QUrl::FullyEncoded), QUrl::TolerantMode);
+        return mirrored;
+    }
+    return std::nullopt;
+}
+
+std::optional<Target> choose(const QUrl& original, const Config& config, Verb verb, bool contentPinned)
+{
+    if (!isDisabledForSession(Provider::Mcim)) {
+        if (auto mirrored = rewriteMcim(original, config, verb, contentPinned)) {
+            return Target{ *mirrored, Provider::Mcim, true };
+        }
+    }
+
+    const bool bmclapiUsable =
+        config.mode == Mode::MirrorOnly || (config.mode == Mode::PreferMirror && !isDisabledForSession(Provider::Bmclapi));
+    if (bmclapiUsable && verb == Verb::Get && contentPinned) {
+        if (auto mirrored = rewrite(original, config.base)) {
+            return Target{ *mirrored, Provider::Bmclapi, config.mode == Mode::PreferMirror };
+        }
+    }
+    return std::nullopt;
+}
+
 Config currentConfig()
 {
 #ifdef LAUNCHER_APPLICATION
@@ -91,9 +181,13 @@ Config currentConfig()
     }
     const auto settings = APPLICATION->settings();
 
+    Config config;
+    config.modrinth = platformSetting(settings->get("ModrinthMirror"));
+    config.curseForge = platformSetting(settings->get("CurseForgeMirror"));
+
     const auto mode = settings->get("DownloadMirrorMode").toInt();
     if (mode != static_cast<int>(Mode::PreferMirror) && mode != static_cast<int>(Mode::MirrorOnly)) {
-        return {};
+        return config;
     }
 
     auto baseText = settings->get("DownloadMirrorURL").toString().trimmed();
@@ -102,27 +196,29 @@ Config currentConfig()
     }
     const QUrl base(baseText, QUrl::StrictMode);
     if (!base.isValid() || base.host().isEmpty() || (base.scheme() != "https" && base.scheme() != "http")) {
-        return {};
+        return config;
     }
-    return { static_cast<Mode>(mode), base };
+    config.mode = static_cast<Mode>(mode);
+    config.base = base;
+    return config;
 #else
     return {};
 #endif
 }
 
-void reportSuccess()
+void reportSuccess(Provider provider)
 {
-    s_consecutiveFailures = 0;
+    failures(provider) = 0;
 }
 
-void reportFailure()
+void reportFailure(Provider provider)
 {
-    s_consecutiveFailures++;
+    failures(provider)++;
 }
 
-bool isDisabledForSession()
+bool isDisabledForSession(Provider provider)
 {
-    return s_consecutiveFailures >= FAILURES_BEFORE_DISABLING;
+    return failures(provider) >= FAILURES_BEFORE_DISABLING;
 }
 
 }  // namespace Net::DownloadMirror

@@ -1170,6 +1170,8 @@ SET(LAUNCHER_SOURCES
     ui/widgets/MinecraftSettingsWidget.cpp
     ui/widgets/JavaSettingsWidget.h
     ui/widgets/JavaSettingsWidget.cpp
+    ui/widgets/MirrorSettingsWidget.h
+    ui/widgets/MirrorSettingsWidget.cpp
 
     # GUI - instance group view
     ui/instanceview/InstanceProxyModel.cpp

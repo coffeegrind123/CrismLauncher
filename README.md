@@ -25,8 +25,9 @@
 - Offline accounts work without owning Minecraft or adding a Microsoft account, and game files download without any account
 - authlib-injector accounts: log in to Ely.by, LittleSkin, Blessing Skin, Drasl or any Yggdrasil-compatible server (Accounts → Add authlib-injector). The agent is downloaded, verified and injected automatically, and skins can be changed where the server allows it. Fjord Launcher account files load as-is
 
-**Download mirror**
+**Download mirrors**
 - Optional (Settings → Services): fetch Minecraft, libraries, assets, Java, Forge and NeoForge from BMCLAPI or a compatible mirror, falling back to the official servers on any failure. Mirrored files are verified against the official checksums
+- Optional, per platform: Modrinth and CurseForge search, update checks and mod files through the MCIM cache, falling back to the official servers. API keys are never sent to it
 
 **Updates**
 - The built-in updater (Sparkle on macOS) follows this fork's releases, not upstream Prism's
