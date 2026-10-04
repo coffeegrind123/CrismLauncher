@@ -166,6 +166,18 @@ class Recolor(unittest.TestCase):
         self.assertAlmostEqual(colorsys.rgb_to_hls(r / 255, g / 255, b / 255)[0], expected, delta=2 / 256)
 
 
+class ReadmeLogo(unittest.TestCase):
+    def test_recolored_and_renamed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp, "nested", "logo.svg")
+            rebrand.write_readme_logo(REPO_ROOT, out)
+            svg = out.read_bytes()
+        self.assertIn(b"<svg", svg)
+        self.assertNotIn(b"#df6277", svg)
+        self.assertIn(b"Crism Launcher Logo", svg)
+        self.assertEqual(rebrand.leftovers(svg), [])
+
+
 class AgainstThisCheckout(unittest.TestCase):
     """Fails when upstream changes the text a targeted edit expects."""
 

@@ -5,6 +5,7 @@ CI runs this on its fresh checkout before configuring, so the repository itself 
 daily upstream merge stays conflict-free. The rules, what stays untouched and why, are in context/branding.md.
 
     python3 scripts/rebrand/rebrand.py [--root DIR] [--repo OWNER/NAME] [--dry-run]
+    python3 scripts/rebrand/rebrand.py --readme-logo OUT.svg    (only writes the recolored icon, for the README)
 
 Order matters:
     recolor logos -> targeted edits -> rename contents -> rename paths -> fork CMake additions -> audit
@@ -30,6 +31,10 @@ HUE_BAND_START = 300 / 360
 HUE_BAND_WIDTH = 80 / 360
 
 DEFAULT_REPO = "coffeegrind123/CrismLauncher"
+
+# The app icon without the wordmark: the wordmark logos spell "Prism Launcher" in outlined glyphs, which no text
+# rename can change
+README_LOGO_SOURCE = "program_info/org.prismlauncher.PrismLauncher.svg"
 
 # Wraps text that a targeted edit inserts and the rename must leave alone (e.g. a reference to upstream Prism)
 KEEP_OPEN = b"\x01"
@@ -402,15 +407,27 @@ def list_protected(root: Path, files: list[str]) -> None:
                     print(f"protected {rel}:{line}: {match.group(0).decode(errors='replace').strip()[:140]}")
 
 
+def write_readme_logo(root: Path, out: Path) -> None:
+    logo, _ = rename_text(recolor_svg((root / README_LOGO_SOURCE).read_bytes()))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(logo)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY") or DEFAULT_REPO, help="fork's GitHub OWNER/NAME")
     parser.add_argument("--dry-run", action="store_true", help="report what would change without writing")
     parser.add_argument("--list-protected", action="store_true", help="print every span that keeps prism, for review")
+    parser.add_argument("--readme-logo", type=Path, metavar="OUT", help="write the recolored icon to OUT and stop")
     args = parser.parse_args()
 
     root = args.root.resolve()
+    if args.readme_logo:
+        write_readme_logo(root, args.readme_logo)
+        print(f"Wrote {args.readme_logo}")
+        return 0
+
     files = tracked_files(root)
     report = Report()
     edits = targeted_edits(args.repo)
