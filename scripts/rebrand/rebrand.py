@@ -365,30 +365,32 @@ def add_fork_cmake(root: Path, report: Report, dry_run: bool) -> None:
             f.write(LEGACY_INSTALL_CMAKE.encode())
 
 
-def audit(root: Path, edits: list[Edit]) -> list[str]:
-    """Walks the tree rather than asking git, which still lists the pre-rename paths. Text a targeted edit kept on
-    purpose is allowed, in its final form."""
+def audit(root: Path, edits: list[Edit], files: list[str]) -> list[str]:
+    """Checks the tracked files (pre-rename list) under their new names. Only tracked files: the submodules CI
+    checks out (vcpkg's ports include an unrelated "prism" library) aren't ours to rename. Text a targeted edit kept
+    on purpose is allowed, in its final form."""
     allowed: dict[str, list[bytes]] = {}
     for edit in edits:
         if KEEP_OPEN in edit.new:
             allowed.setdefault(rename_path(edit.path), []).append(rename_text(edit.new)[0])
+
     problems = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d != ".git"]
-        for name in filenames:
-            path = Path(dirpath, name)
-            rel = path.relative_to(root).as_posix()
-            if not AUDIT_SCOPE.match(rel) or any(p.search(rel) for p in SKIP_CONTENT):
-                continue
-            if leftovers(rel.encode()):
-                problems.append(f"{rel}: path still contains prism")
-            if not is_regular(path):
-                continue
-            data = path.read_bytes()
-            if is_binary(data):
-                continue
-            for line in leftovers(data, allowed.get(rel, [])):
-                problems.append(f"{rel}:{line}: {data.splitlines()[line - 1].decode(errors='replace').strip()[:160]}")
+    for old_rel in files:
+        if any(p.search(old_rel) for p in SKIP_CONTENT):
+            continue
+        rel = rename_path(old_rel)
+        if not AUDIT_SCOPE.match(rel):
+            continue
+        if leftovers(rel.encode()):
+            problems.append(f"{rel}: path still contains prism")
+        path = root / rel
+        if not is_regular(path):
+            continue
+        data = path.read_bytes()
+        if is_binary(data):
+            continue
+        for line in leftovers(data, allowed.get(rel, [])):
+            problems.append(f"{rel}:{line}: {data.splitlines()[line - 1].decode(errors='replace').strip()[:160]}")
     return problems
 
 
@@ -449,7 +451,7 @@ def main() -> int:
         list_protected(root, files)
 
     if not args.dry_run:
-        report.errors += audit(root, edits)
+        report.errors += audit(root, edits, files)
 
     if report.errors:
         print(f"\n{len(report.errors)} problem(s):", file=sys.stderr)

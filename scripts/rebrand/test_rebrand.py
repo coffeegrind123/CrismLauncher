@@ -178,6 +178,27 @@ class ReadmeLogo(unittest.TestCase):
         self.assertEqual(rebrand.leftovers(svg), [])
 
 
+class Audit(unittest.TestCase):
+    def test_ignores_untracked_files_such_as_submodules(self):
+        # CI checks out cmake/vcpkg, whose third-party ports (ethindp-prism) aren't ours to rename
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "launcher").mkdir()
+            (root / "launcher/a.cpp").write_bytes(b"Crism\n")
+            port = root / "cmake/vcpkg/ports/ethindp-prism"
+            port.mkdir(parents=True)
+            (port / "vcpkg.json").write_bytes(b'"name": "ethindp-prism"\n')
+            self.assertEqual(rebrand.audit(root, [], ["launcher/a.cpp"]), [])
+
+    def test_checks_tracked_files_under_their_new_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "launcher").mkdir()
+            (root / "launcher/crism.cpp").write_bytes(b"ok\nPrism left\n")
+            problems = rebrand.audit(root, [], ["launcher/prism.cpp"])
+        self.assertEqual(problems, ["launcher/crism.cpp:2: Prism left"])
+
+
 class AgainstThisCheckout(unittest.TestCase):
     """Fails when upstream changes the text a targeted edit expects."""
 
@@ -218,7 +239,7 @@ class WholeTree(unittest.TestCase):
         rebrand.rename_paths(cls.root, files, report, dry_run=False)
         rebrand.add_fork_cmake(cls.root, report, dry_run=False)
         cls.report = report
-        cls.problems = rebrand.audit(cls.root, edits)
+        cls.problems = rebrand.audit(cls.root, edits, files)
 
     @classmethod
     def tearDownClass(cls):
