@@ -185,8 +185,9 @@ jobs:
       # BUILD
       ##
 
-      # The updater follows this repository's releases. On macOS, Sparkle must not use upstream's feed (it would
-      # offer vanilla Prism): point it at the appcast published with each release, or disable it without a key.
+      # The updater and the news panel follow this repository's releases. On macOS, Sparkle must not use upstream's
+      # feed (it would offer vanilla Prism): point it at the appcast published with each release, or disable it
+      # without a key.
       - name: Configure project
         env:
           SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
@@ -203,6 +204,8 @@ jobs:
             -D VCPKG_HOST_TRIPLET="$VCPKG_TRIPLET" \
             -D VCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
             -D Launcher_UPDATER_GITHUB_REPO="https://github.com/${{ github.repository }}" \
+            -D Launcher_NEWS_RSS_URL="https://github.com/${{ github.repository }}/releases.atom" \
+            -D Launcher_NEWS_OPEN_URL="https://github.com/${{ github.repository }}/releases" \
             -D Launcher_FORK_PATCH_VERSION="${{ needs.version.outputs.patch }}" \
             "${extra[@]}"
 
@@ -364,6 +367,19 @@ jobs:
           </rss>
           EOF
 
+      # Taken before the old release is deleted: the new notes cover everything since it
+      - name: Find previous release
+        id: previous
+        run: |
+          tag=$(gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name 2>/dev/null || true)
+          git fetch --tags --quiet
+          if [ -n "$tag" ] && git rev-parse -q --verify "refs/tags/$tag^{commit}" >/dev/null; then
+            echo "commit=$(git rev-parse "refs/tags/$tag^{commit}")" >> "$GITHUB_OUTPUT"
+            echo "Previous release: $tag"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Delete existing releases and tags
         run: |
           gh api "/repos/${{ github.repository }}/releases" --paginate --jq '.[].id' | while read -r release_id; do
@@ -380,18 +396,39 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate release notes
+        env:
+          PREVIOUS: ${{ steps.previous.outputs.commit }}
         run: |
-          # Upstream commits brought in by the daily sync merges
-          changelog=""
+          # The news panel shows these notes, so list what changed since the previous release: this fork's own
+          # commits, and the upstream commits the daily sync merged in
+          range="${PREVIOUS:+$PREVIOUS..}HEAD"
+          limit=$([ -n "$PREVIOUS" ] && echo 200 || echo 20)
+
+          crism=""
+          while read -r hash subject; do
+            case "$subject" in "🤖 Auto-update README"*) continue ;; esac
+            crism+="- $subject ([${hash:0:7}](https://github.com/${{ github.repository }}/commit/$hash))"$'\n'
+          done < <(git log --no-merges --first-parent --format='%H %s' -n "$limit" "$range")
+
+          upstream=""
           while read -r merge _; do
-            while read -r commit; do
-              [ -n "$commit" ] || continue
-              hash=${commit%% *}
-              changelog+="- ${commit#* } ([${hash:0:7}](https://github.com/PrismLauncher/PrismLauncher/commit/$hash))"$'\n'
-            done < <(git log --format='%H %s' "$merge^1..$merge^2" 2>/dev/null | head -10)
-          done < <(git log --merges --format='%H %s' -20 | grep -i upstream || true)
-          [ -n "$changelog" ] || changelog="- Minor updates and improvements"$'\n'
-          printf '## Changelog\n%s' "$changelog" > RELEASE_BODY.md
+            while read -r hash subject; do
+              upstream+="- $subject ([${hash:0:7}](https://github.com/PrismLauncher/PrismLauncher/commit/$hash))"$'\n'
+            done < <(git log --no-merges --format='%H %s' "$merge^1..$merge^2")
+          done < <(git log --merges --first-parent --format='%H %s' -n "$limit" "$range" | grep -i upstream || true)
+
+          {
+            echo "## Changes"
+            echo
+            printf '%s' "${crism:-- No changes of our own in this release}"$'\n'
+            if [ -n "$upstream" ]; then
+              echo
+              echo "## From upstream Prism Launcher"
+              echo
+              printf '%s' "$upstream"
+            fi
+          } > RELEASE_BODY.md
+          cat RELEASE_BODY.md
 
       - name: Create GitHub release
         uses: ncipollo/release-action@v1
