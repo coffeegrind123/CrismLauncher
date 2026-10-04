@@ -46,6 +46,20 @@ ChooseOfflineNameDialog::~ChooseOfflineNameDialog()
     delete ui;
 }
 
+MinecraftAccountPtr ChooseOfflineNameDialog::newAccount(QWidget* parent, const QString& message)
+{
+    ChooseOfflineNameDialog dialog(message, parent);
+    if (dialog.exec() != QDialog::Accepted) {
+        return nullptr;
+    }
+
+    auto account = MinecraftAccount::createOffline(dialog.getUsername());
+    if (account) {
+        account->login()->start();  // The task will complete here.
+    }
+    return account;
+}
+
 QString ChooseOfflineNameDialog::getUsername() const
 {
     return ui->usernameTextBox->text();

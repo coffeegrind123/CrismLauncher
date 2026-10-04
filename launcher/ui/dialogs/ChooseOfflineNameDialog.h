@@ -21,6 +21,8 @@
 #include <QDialog>
 #include <QRegularExpressionValidator>
 
+#include "minecraft/auth/MinecraftAccount.h"
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class ChooseOfflineNameDialog;
@@ -33,6 +35,9 @@ class ChooseOfflineNameDialog final : public QDialog {
    public:
     explicit ChooseOfflineNameDialog(const QString& message, QWidget* parent = nullptr);
     ~ChooseOfflineNameDialog() override;
+
+    //! Asks for a name and returns a new offline account, or nullptr when cancelled
+    static MinecraftAccountPtr newAccount(QWidget* parent, const QString& message);
 
     QString getUsername() const;
     void setUsername(const QString& username) const;

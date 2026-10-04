@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>300</height>
+    <height>360</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,7 +17,7 @@
    <item>
     <widget class="QLabel" name="label">
      <property name="text">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:14pt; font-weight:600;&quot;&gt;Add Microsoft account&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:14pt; font-weight:600;&quot;&gt;Add an account&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
      <property name="textFormat">
       <enum>Qt::RichText</enum>
@@ -30,7 +30,7 @@
    <item>
     <widget class="QLabel" name="label_2">
      <property name="text">
-      <string>In order to play Minecraft, you must have at least one Microsoft account logged in. Do you want to log in now?</string>
+      <string>You need an account to play. Pick the kind you have; you can add more later under Settings → Accounts.</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -45,9 +45,53 @@
     </widget>
    </item>
    <item>
-    <widget class="QPushButton" name="pushButton">
+    <widget class="QPushButton" name="microsoftButton">
      <property name="text">
-      <string>Add Microsoft account</string>
+      <string>Microsoft account</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="microsoftLabel">
+     <property name="text">
+      <string>The account you bought Minecraft with. Needed for official servers and Realms.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="authlibInjectorButton">
+     <property name="text">
+      <string>Third-party login server</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="authlibInjectorLabel">
+     <property name="text">
+      <string>An account on an authlib-injector server such as Ely.by or LittleSkin. Works on servers that use the same login server.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="offlineButton">
+     <property name="text">
+      <string>Offline account</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="offlineLabel">
+     <property name="text">
+      <string>Just a player name, no login. Works in singleplayer, on LAN and on servers in offline mode.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
      </property>
     </widget>
    </item>
@@ -59,7 +103,7 @@
      <property name="sizeHint" stdset="0">
       <size>
        <width>20</width>
-       <height>156</height>
+       <height>40</height>
       </size>
      </property>
     </spacer>
@@ -68,7 +112,4 @@
  </widget>
  <resources/>
  <connections/>
- <buttongroups>
-  <buttongroup name="buttonGroup"/>
- </buttongroups>
 </ui>

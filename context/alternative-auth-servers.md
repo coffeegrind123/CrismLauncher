@@ -4,6 +4,10 @@ Status: implemented (2026-10). Code: `launcher/minecraft/auth/Yggdrasil.*`, `Ygg
 `steps/Yggdrasil*Step.*`, `steps/AuthlibInjectorMetadataStep.*`, `minecraft/launch/EnsureAuthlibInjector.*`,
 `ui/dialogs/AuthlibInjectorLoginDialog.*`. Tests: `tests/Yggdrasil_test.cpp` (fixtures in `tests/testdata/Yggdrasil/`).
 
+Setup wizard: the login page (shown while no account exists, even without a Microsoft client ID) offers Microsoft
+(hidden without client ID), authlib-injector and offline; the chosen account becomes the default. The offline flow is
+`ChooseOfflineNameDialog::newAccount`, shared with the Accounts page.
+
 ## Account model
 
 `AccountType::AuthlibInjector`, stored in `accounts.json` with Fjord Launcher's keys so files move both ways:
