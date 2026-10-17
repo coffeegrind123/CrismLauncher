@@ -197,7 +197,9 @@ void FlameCreationTask::executeTask()
                 }
             }
 
-            filesIterator++;
+            if (filesIterator != files.end()) {
+                filesIterator++;
+            }
         }
 
         const QDir oldMinecraftDir(inst->gameRoot());
@@ -629,7 +631,13 @@ void FlameCreationTask::setupDownloadJob()
         }
 
         relpath = FS::PathCombine(m_rootPath, relpath);
-        auto path = FS::PathCombine(m_stagingPath, relpath);
+        auto path = FS::getSafePathInRoot(m_stagingPath, relpath);
+        if (!path) {
+            emitFailed(tr("The modpack is trying to download a file outside of the instance folder (%1). This is a security risk and isn't "
+                          "allowed.")
+                           .arg(relpath));
+            return;
+        }
 
         auto url = result.version.downloadUrl;
         if (url.isEmpty()) {
@@ -638,8 +646,8 @@ void FlameCreationTask::setupDownloadJob()
         }
 
         if (!url.isEmpty()) {
-            qDebug() << "Will download" << url << "to" << path;
-            auto dl = Net::ApiRequest::makeFile(url, path);
+            qDebug() << "Will download" << url << "to" << *path;
+            auto dl = Net::ApiRequest::makeFile(url, *path);
             // CurseForge's hash pins the file, which also lets the MCIM mirror serve it
             if (!result.version.hash.isEmpty()) {
                 switch (Hashing::algorithmFromString(result.version.hashType)) {
