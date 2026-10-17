@@ -33,6 +33,15 @@ runs:
         distribution: zulu
         java-version: 17
 
+    # Zulu 17's C2 JIT on windows-aarch64 intermittently segfaults inside javac
+    # (EXCEPTION_ACCESS_VIOLATION in Symtab.enterClass) while building NewLaunch.jar.
+    # javac runs for seconds, so capping it at C1 costs nothing and avoids C2 entirely.
+    - name: Disable C2 JIT for javac (MSVC arm64)
+      if: ${{ inputs.vcvars-arch == 'arm64' }}
+      shell: bash
+      run: |
+        echo "JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1" >> "$GITHUB_ENV"
+
     - name: Setup vcpkg cache (MSVC)
       if: ${{ inputs.msystem == '' && inputs.build-type == 'Debug' }}
       shell: pwsh
