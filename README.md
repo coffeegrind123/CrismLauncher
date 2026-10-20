@@ -39,12 +39,12 @@
 
 | Platform | Download |
 |----------|----------|
-| **Windows x64** | [CrismLauncher-Windows-MinGW-w64-Portable-12.0.40.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.40/CrismLauncher-Windows-MinGW-w64-Portable-12.0.40.zip)<br/>[CrismLauncher-Windows-MinGW-w64-Setup-12.0.40.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.40/CrismLauncher-Windows-MinGW-w64-Setup-12.0.40.exe) |
-| **Windows ARM64** | [CrismLauncher-Windows-MSVC-arm64-Portable-12.0.40.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.40/CrismLauncher-Windows-MSVC-arm64-Portable-12.0.40.zip)<br/>[CrismLauncher-Windows-MSVC-arm64-Setup-12.0.40.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.40/CrismLauncher-Windows-MSVC-arm64-Setup-12.0.40.exe) |
-| **macOS** | [CrismLauncher-macOS-12.0.40.dmg](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.40/CrismLauncher-macOS-12.0.40.dmg)<br/>[CrismLauncher-macOS-12.0.40.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.40/CrismLauncher-macOS-12.0.40.zip) |
-| **Linux x86_64** | [CrismLauncher-Linux-Qt6-Portable-12.0.40.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.40/CrismLauncher-Linux-Qt6-Portable-12.0.40.tar.gz)<br/>[CrismLauncher-Linux-x86_64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.40/CrismLauncher-Linux-x86_64.AppImage) |
-| **Linux ARM64** | [CrismLauncher-Linux-aarch64-Qt6-Portable-12.0.40.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.40/CrismLauncher-Linux-aarch64-Qt6-Portable-12.0.40.tar.gz)<br/>[CrismLauncher-Linux-aarch64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.40/CrismLauncher-Linux-aarch64.AppImage) |
+| **Windows x64** | [CrismLauncher-Windows-MinGW-w64-Portable-12.0.41.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.41/CrismLauncher-Windows-MinGW-w64-Portable-12.0.41.zip)<br/>[CrismLauncher-Windows-MinGW-w64-Setup-12.0.41.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.41/CrismLauncher-Windows-MinGW-w64-Setup-12.0.41.exe) |
+| **Windows ARM64** | [CrismLauncher-Windows-MSVC-arm64-Portable-12.0.41.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.41/CrismLauncher-Windows-MSVC-arm64-Portable-12.0.41.zip)<br/>[CrismLauncher-Windows-MSVC-arm64-Setup-12.0.41.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.41/CrismLauncher-Windows-MSVC-arm64-Setup-12.0.41.exe) |
+| **macOS** | [CrismLauncher-macOS-12.0.41.dmg](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.41/CrismLauncher-macOS-12.0.41.dmg)<br/>[CrismLauncher-macOS-12.0.41.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.41/CrismLauncher-macOS-12.0.41.zip) |
+| **Linux x86_64** | [CrismLauncher-Linux-Qt6-Portable-12.0.41.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.41/CrismLauncher-Linux-Qt6-Portable-12.0.41.tar.gz)<br/>[CrismLauncher-Linux-x86_64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.41/CrismLauncher-Linux-x86_64.AppImage) |
+| **Linux ARM64** | [CrismLauncher-Linux-aarch64-Qt6-Portable-12.0.41.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.41/CrismLauncher-Linux-aarch64-Qt6-Portable-12.0.41.tar.gz)<br/>[CrismLauncher-Linux-aarch64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.41/CrismLauncher-Linux-aarch64.AppImage) |
 
 ---
 
-*Last updated: 2026-10-19 12:25 UTC*
+*Last updated: 2026-10-20 11:30 UTC*
