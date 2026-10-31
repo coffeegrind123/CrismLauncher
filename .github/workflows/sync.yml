@@ -9,7 +9,16 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    
+    # Checkout and push use PAT_TOKEN; GITHUB_TOKEN is only for the issue steps
+    permissions:
+      contents: read
+      issues: write
+    env:
+      SYNC_ISSUE_TITLE: Upstream sync failed
+      # The job adds an `upstream` remote, which gh would otherwise resolve to
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,3 +88,44 @@ jobs:
         if: steps.check_changes.outputs.has_changes == 'false'
         run: |
           echo "ℹ️ No new changes from upstream to sync"
+
+      # One open issue at a time: later failures comment on it, the next
+      # successful sync closes it.
+      - name: Report sync failure
+        if: failure()
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          CONFLICTS=$(git diff --name-only --diff-filter=U)
+          {
+            if [ -n "$CONFLICTS" ]; then
+              echo "Merging \`upstream/develop\` into \`develop\` conflicts in:"
+              echo
+              while IFS= read -r f; do
+                echo "- \`$f\`"
+              done <<< "$CONFLICTS"
+              echo
+              echo "Resolve locally (\`git merge upstream/develop\`) and push to \`develop\`."
+            else
+              echo "The sync job failed without a merge conflict. See the run log."
+            fi
+            echo
+            echo "Run: $RUN_URL"
+          } > "$RUNNER_TEMP/sync-issue.md"
+
+          ISSUE=$(gh issue list --state open --search "in:title \"$SYNC_ISSUE_TITLE\"" \
+            --json number,title --jq "map(select(.title == env.SYNC_ISSUE_TITLE))[0].number // empty")
+          if [ -n "$ISSUE" ]; then
+            gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/sync-issue.md"
+          else
+            gh issue create --title "$SYNC_ISSUE_TITLE" --body-file "$RUNNER_TEMP/sync-issue.md"
+          fi
+
+      - name: Close sync failure issue
+        if: success()
+        run: |
+          ISSUE=$(gh issue list --state open --search "in:title \"$SYNC_ISSUE_TITLE\"" \
+            --json number,title --jq "map(select(.title == env.SYNC_ISSUE_TITLE))[0].number // empty")
+          if [ -n "$ISSUE" ]; then
+            gh issue close "$ISSUE" --comment "Sync succeeded: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
