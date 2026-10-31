@@ -85,7 +85,6 @@ class AccountList : public QAbstractListModel {
      *  Profile IDs alone collide, e.g. an offline "Steve" and one on a server using offline UUIDs. */
     int findSameAccount(const MinecraftAccountPtr& account) const;
     MinecraftAccountPtr getAccountByProfileName(const QString& profileName) const;
-    QStringList profileNames() const;
 
     // requesting a refresh pushes it to the front of the queue
     void requestRefresh(QString accountId);

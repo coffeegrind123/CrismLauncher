@@ -46,11 +46,13 @@
 
 #include "minecraft/auth/MinecraftAccount.h"
 
+class EditableLabel;
 class LaunchController;
 class NewsChecker;
+class QLabel;
+class QTextEdit;
 class QToolButton;
 class InstanceProxyModel;
-class QLabel;
 class MinecraftInstance;
 class MinecraftLauncher;
 class BaseProfilerFactory;
@@ -115,6 +117,7 @@ class MainWindow : public QMainWindow {
     void on_actionViewIconsFolder_triggered();
     void on_actionViewLogsFolder_triggered();
     void on_actionViewJavaFolder_triggered();
+    void on_actionViewTemplateFolder_triggered();
 
     void on_actionViewSkinsFolder_triggered();
 
@@ -217,8 +220,6 @@ class MainWindow : public QMainWindow {
    private:
     void retranslateUi();
 
-    void updateNameLabel();
-
     void updateInstanceToolBarOrientation(Qt::Orientation orientation);
 
     void addInstance(const QString& url = QString(), const QMap<QString, QString>& extra_info = {});
@@ -232,6 +233,8 @@ class MainWindow : public QMainWindow {
     void runModalTask(Task* task);
     void instanceFromInstanceTask(InstanceTask* task);
 
+    void handleInstanceRename(const QString& before, const QString& after);
+
    private:
     Ui::MainWindow* ui;
     // these are managed by Qt's memory management model!
@@ -240,9 +243,10 @@ class MainWindow : public QMainWindow {
     QToolButton* newsLabel = nullptr;
     QLabel* m_statusLeft = nullptr;
     QLabel* m_statusCenter = nullptr;
-    QToolButton* changeIconButton = nullptr;
-    QAction* instanceInfoWidget = nullptr;
-    QLabel* nameLabel = nullptr;
+    QToolButton* m_changeIconButton = nullptr;
+    QAction* m_instanceToolBarTopSeparator = nullptr;
+    QAction* m_instanceInfoWidget = nullptr;
+    EditableLabel* m_nameLabel = nullptr;
     QToolButton* helpMenuButton = nullptr;
     KonamiCode* secretEventFilter = nullptr;
 

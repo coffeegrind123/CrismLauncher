@@ -237,12 +237,6 @@ int Resource::compare(const Resource& other, SortType type) const
             }
             break;
         }
-        case SortType::LockUpdate: {
-            if (lockUpdate() != other.lockUpdate()) {
-                return lockUpdate() ? -1 : 1;
-            }
-            break;
-        }
     }
 
     return 0;
@@ -349,15 +343,6 @@ bool Resource::isSymLinkUnder(const QString& instPath) const
 bool Resource::isMoreThanOneHardLink() const
 {
     return m_hardLinkCount > 1;
-}
-
-auto Resource::getOriginalFileName() const -> QString
-{
-    auto fileName = m_fileInfo.fileName();
-    if (!m_enabled) {
-        fileName.chop(9);
-    }
-    return fileName;
 }
 
 QDebug operator<<(QDebug debug, ResourceType type)

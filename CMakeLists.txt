@@ -53,9 +53,7 @@ if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
 
     add_link_options(
         # /LTCG allows for linking wholy optimizated programs
-        # /MANIFEST:NO disables generating a manifest file, we instead provide our own
-        # /STACK sets the stack reserve size, ATL's pack list needs 3-4 MiB as of November 2022, provide 8 MiB
-        "$<$<COMPILE_LANGUAGE:C,CXX>:/LTCG;/MANIFEST:NO;/STACK:8388608>"
+        $<$<AND:$<CONFIG:Release,RelWithDebInfo>,$<COMPILE_LANGUAGE:C,CXX>>:/LTCG>
     )
 
     # /GL enables whole program optimizations
@@ -128,6 +126,8 @@ if (DEBUG_ADDRESS_SANITIZER)
                 $<${USE_ASAN_COMPILE_OPTIONS}:/fsanitize=address>
                 $<${USE_ASAN_COMPILE_OPTIONS}:/Oy->
         )
+        # NOTE: /INCREMENTAL emits warnings when used on asan'd objects
+        add_link_options($<${USE_ASAN_COMPILE_OPTIONS}:/INCREMENTAL:NO>)
     elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         message(STATUS "Using Address Sanitizer compile options for GCC/Clang")
         add_compile_options(
@@ -172,10 +172,6 @@ find_package(ECM NO_MODULE REQUIRED)
 set(CMAKE_MODULE_PATH "${ECM_MODULE_PATH};${CMAKE_MODULE_PATH}")
 
 include(CTest)
-include(ECMAddTests)
-if(BUILD_TESTING)
-    enable_testing()
-endif()
 
 ##################################### Set Application options #####################################
 
@@ -240,6 +236,12 @@ set(Launcher_SUBREDDIT_URL "https://prismlauncher.org/reddit" CACHE STRING "URL 
 set(Launcher_QT_VERSION_MAJOR "6" CACHE STRING "Major Qt version to build against")
 
 option(Launcher_USE_PCH "Use precompiled headers where possible" ON)
+
+option(Launcher_WARNING_AS_ERROR "Treat compiler/linker warnings as errors (-Werror)")
+
+if(Launcher_WARNING_AS_ERROR)
+    message(STATUS "Treating all warnings as errors for launcher targets")
+endif()
 
 # Java downloader
 set(Launcher_ENABLE_JAVA_DOWNLOADER_DEFAULT ON)

@@ -47,8 +47,6 @@
 #include "icons/IconUtils.h"
 #include "settings/SettingsObject.h"
 
-#define MAX_SIZE 1024
-
 IconList::IconList(const QStringList& builtinPaths, const QString& path, QObject* parent) : QAbstractListModel(parent)
 {
     QSet<QString> builtinNames;
@@ -77,20 +75,6 @@ IconList::IconList(const QStringList& builtinPaths, const QString& path, QObject
 
     // Forces the UI to update, so that lengthy icon names are shown properly from the start
     emit iconUpdated({});
-}
-
-void IconList::sortIconList()
-{
-    qDebug() << "Sorting icon list...";
-    std::sort(m_icons.begin(), m_icons.end(), [](const MMCIcon& a, const MMCIcon& b) {
-        bool aIsSubdir = a.m_key.contains(QDir::separator());
-        bool bIsSubdir = b.m_key.contains(QDir::separator());
-        if (aIsSubdir != bIsSubdir) {
-            return !aIsSubdir;  // root-level icons come first
-        }
-        return a.m_key.localeAwareCompare(b.m_key) < 0;
-    });
-    reindex();
 }
 
 bool IconList::addPath(const QString& path)
@@ -183,8 +167,8 @@ void IconList::directoryChanged(const QString& path)
         if (m_icons[idx].type() == ToBeDeleted) {
             beginRemoveRows(QModelIndex(), idx, idx);
             m_icons.remove(idx);
-            reindex();
             endRemoveRows();
+            reindex();
         } else {
             dataChanged(index(idx), index(idx));
         }
@@ -205,8 +189,6 @@ void IconList::directoryChanged(const QString& path)
             emit iconUpdated(key);
         }
     }
-
-    sortIconList();
 }
 
 void IconList::fileChanged(const QString& path)
@@ -340,8 +322,12 @@ void IconList::installIcon(const QString& file, const QString& name)
     if (!IconUtils::isIconSuffix(fileinfo.suffix()))
         return;
 
-    QString target = FS::PathCombine(getDirectory(), name.isEmpty() ? fileinfo.fileName() : name);
-    QFile::copy(file, target);
+    const auto target = FS::getSafePathInRoot(getDirectory(), name.isEmpty() ? fileinfo.fileName() : name);
+    if (!target.has_value()) {
+        qWarning() << "Installing icon to list -" << target.error();
+        return;
+    }
+    QFile::copy(file, target.value());
 }
 
 bool IconList::iconFileExists(const QString& key) const
@@ -438,7 +424,6 @@ void IconList::reindex()
     m_nameIndex.clear();
     for (int i = 0; i < m_icons.size(); i++) {
         m_nameIndex[m_icons[i].m_key] = i;
-        emit iconUpdated(m_icons[i].m_key);  // prevents incorrect indices with proxy model
     }
 }
 

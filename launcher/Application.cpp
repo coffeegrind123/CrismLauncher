@@ -102,6 +102,7 @@
 #include <QStringList>
 #include <QStringLiteral>
 #include <QStyleFactory>
+#include <QStyleHints>
 #include <QTranslator>
 #include <QWindow>
 #include <utility>
@@ -164,14 +165,7 @@
 #include <windows.h>
 #endif
 
-#if defined(Q_OS_WIN32) || defined(Q_OS_MAC)
-#include <QStyleHints>
-#endif
-
 #include "console/Console.h"
-
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
 
 static const QLatin1String g_liveCheckFile("live.check");
 
@@ -316,7 +310,6 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     setApplicationDisplayName(QString("%1 %2").arg(BuildConfig.LAUNCHER_DISPLAYNAME, BuildConfig.printableVersionString()));
     setApplicationVersion(BuildConfig.printableVersionString() + "\n" + BuildConfig.GIT_COMMIT);
     setDesktopFileName(BuildConfig.LAUNCHER_APPID);
-    m_startTime = QDateTime::currentDateTime();
 
     // Don't quit on hiding the last window
     Application::setQuitOnLastWindowClosed(false);
@@ -668,8 +661,8 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
 
         m_settings->registerSetting("NumberOfConcurrentTasks", 10);
         m_settings->registerSetting("NumberOfConcurrentDownloads", 6);
-        m_settings->registerSetting("NumberOfManualRetries", 1);
-        m_settings->registerSetting("RequestTimeout", 60);
+        m_settings->registerSetting("NetworkRetryLimit", 2);
+        m_settings->registerSetting("RequestTimeout", 15);
 
         QString defaultMonospace;
         int defaultSize = 11;
@@ -713,6 +706,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_settings->registerSetting("MoveModsFromDownloadsDir", false);
         m_settings->registerSetting("SkinsDir", "skins");
         m_settings->registerSetting("JavaDir", "java");
+        m_settings->registerSetting("TemplateDir", "instance-template");
 
 #ifdef Q_OS_MACOS
         // Folder security-scoped bookmarks
@@ -722,6 +716,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_settings->registerSetting("DownloadsDirBookmark", "");
         m_settings->registerSetting("SkinsDirBookmark", "");
         m_settings->registerSetting("JavaDirBookmark", "");
+        m_settings->registerSetting("TemplateDirBookmark", "");
 #endif
 
         // Editors
@@ -763,6 +758,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_settings->registerSetting("JavaVersion", "");
         m_settings->registerSetting("JavaVendor", "");
         m_settings->registerSetting("LastHostname", "");
+        m_settings->registerSetting("PinnedJavaPaths", "{}");
         m_settings->registerSetting("JvmArgs", "");
 
         // Local authlib-injector jar to use instead of downloading the latest release (empty = download)
@@ -1012,6 +1008,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_settings->get("DownloadsDir");
         m_settings->get("SkinsDir");
         m_settings->get("JavaDir");
+        m_settings->get("TemplateDir");
     }
 #endif
 
@@ -1302,16 +1299,24 @@ bool Application::createSetupWizard()
     bool wizardRequired =
         javaRequired || languageRequired || pasteInterventionRequired || themeInterventionRequired || askjava || login || askMirrors;
     if (wizardRequired) {
+        const bool darkMode = QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
         // set default theme after going into theme wizard
         if (!validIcons) {
-            settings()->set("IconTheme", QString("pe_colored"));
+            QString defaultIconTheme;
+            if (QApplication::style()->name() == "breeze") {
+                defaultIconTheme = darkMode ? "breeze_dark" : "breeze_light";
+            } else {
+                defaultIconTheme = darkMode ? "flat_white" : "flat";
+            }
+
+            settings()->set("IconTheme", defaultIconTheme);
         }
         if (!validWidgets) {
-#if defined(Q_OS_WIN32) || defined(Q_OS_MACOS)
-            const QString style =
-                QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark ? QStringLiteral("dark") : QStringLiteral("bright");
+#if defined(Q_OS_LINUX)
+            const QString style = "system";
 #else
-            const QString style = QStringLiteral("system");
+            const QString style = darkMode ? QStringLiteral("dark") : QStringLiteral("bright");
+
 #endif
 
             settings()->set("ApplicationTheme", style);

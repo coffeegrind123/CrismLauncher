@@ -15,9 +15,7 @@
 
 #include <QFileDialog>
 #include <QKeyEvent>
-#include <QLineEdit>
 #include <QPushButton>
-#include <QSortFilterProxyModel>
 #include <QStyledItemDelegate>
 
 #include "Application.h"
@@ -110,6 +108,19 @@ class IconProxyModel : public QSortFilterProxyModel {
         }
     }
 
+    bool lessThan(const QModelIndex& sourceLeft, const QModelIndex& sourceRight) const override
+    {
+        const auto keyLeft = sourceModel()->data(sourceLeft, Qt::UserRole).toString();
+        const auto keyRight = sourceModel()->data(sourceRight, Qt::UserRole).toString();
+        const bool leftIsSubdir = keyLeft.contains(QDir::separator());
+        const bool rightIsSubdir = keyRight.contains(QDir::separator());
+
+        if (leftIsSubdir != rightIsSubdir) {
+            return !leftIsSubdir;  // root-level icons come first
+        }
+        return keyLeft.localeAwareCompare(keyRight) < 0;
+    }
+
    private:
     IconPickerDialog::IconPickerCategory m_category = IconPickerDialog::Any;
 };
@@ -136,7 +147,9 @@ IconPickerDialog::IconPickerDialog(QWidget* parent) : QDialog(parent), ui(new Ui
 
     proxyModel = new IconProxyModel(this);
     proxyModel->setSourceModel(APPLICATION->icons());
+    proxyModel->setDynamicSortFilter(true);
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    proxyModel->sort(0);
     ui->iconView->setModel(proxyModel);
 
     auto contentsWidget = ui->iconView;
@@ -166,8 +179,6 @@ IconPickerDialog::IconPickerDialog(QWidget* parent) : QDialog(parent), ui(new Ui
         IconPickerCategory category = static_cast<IconPickerCategory>(ui->contextCombo->itemData(index).toInt());
         filterIconsByCategory(category);
     });
-    // Prevent incorrect indices from e.g. filesystem changes
-    connect(APPLICATION->icons(), &IconList::iconUpdated, this, [this]() { proxyModel->invalidate(); });
 }
 
 bool IconPickerDialog::eventFilter(QObject* obj, QEvent* evt)
@@ -198,7 +209,17 @@ void IconPickerDialog::addNewIcon()
     //: The type of icon files
     auto filter = IconUtils::getIconFilter();
     QStringList fileNames = QFileDialog::getOpenFileNames(this, selectIcons, QString(), tr("Icons %1").arg(filter));
-    APPLICATION->icons()->installIcons(fileNames);
+    auto* list = APPLICATION->icons();
+    list->installIcons(fileNames);
+    if (fileNames.isEmpty()) {
+        return;
+    }
+
+    auto key = QFileInfo(fileNames.first()).completeBaseName();
+    connect(
+        list, &IconList::iconUpdated, this,
+        [this, list, key] { ui->iconView->setCurrentIndex(proxyModel->mapFromSource(list->index(list->getIconIndex(key)))); },
+        static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::SingleShotConnection));
 }
 
 void IconPickerDialog::removeSelectedIcon()
@@ -234,7 +255,7 @@ int IconPickerDialog::execWithSelection(QString selection)
     selectedIconKey = selection;
 
     int index_nr = list->getIconIndex(selection);
-    auto model_index = list->index(index_nr);
+    auto model_index = proxyModel->mapFromSource(list->index(index_nr));
     contentsWidget->selectionModel()->select(model_index, QItemSelectionModel::Current | QItemSelectionModel::Select);
 
     QMetaObject::invokeMethod(this, "delayed_scroll", Qt::QueuedConnection, Q_ARG(QModelIndex, model_index));
