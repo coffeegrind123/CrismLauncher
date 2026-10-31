@@ -115,30 +115,25 @@ jobs:
         include:
           - os: ubuntu-24.04
             artifact-name: Linux
-            cmake-preset: linux
             qt-version: 6.11.2
 
           - os: ubuntu-24.04-arm
             artifact-name: Linux-aarch64
-            cmake-preset: linux
             qt-version: 6.11.2
 
           - os: windows-2022
             artifact-name: Windows-MinGW-w64
-            cmake-preset: windows_mingw
             msystem: CLANG64
             vcvars-arch: amd64_x86
             qt-version: 6.11.2
 
           - os: windows-11-arm
             artifact-name: Windows-MSVC-arm64
-            cmake-preset: windows_msvc
             vcvars-arch: arm64
             qt-version: 6.11.2
 
           - os: macos-26
             artifact-name: macOS
-            cmake-preset: macos_universal
             macosx-deployment-target: 13.0
             qt-version: 6.11.2
 
@@ -152,9 +147,10 @@ jobs:
       ARTIFACT_NAME: ${{ matrix.artifact-name }}-Qt6
       BUILD_PLATFORM: official
       BUILD_TYPE: Release
-      CMAKE_PRESET: ${{ matrix.cmake-preset }}
+      CMAKE_PRESET: ci
       VERSION: ${{ needs.version.outputs.version }}
 
+      CMAKE_OSX_ARCHITECTURES: x86_64;arm64
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx-deployment-target }}
 
     steps:
