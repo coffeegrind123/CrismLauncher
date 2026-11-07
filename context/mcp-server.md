@@ -230,4 +230,14 @@ with what was measured.
 
 | Phase | State |
 |---|---|
-| 0 | Written 2026-11-07: `launcher/mcp/*`, `ui/pages/global/McpPage.*`, settings `McpEnabled`/`McpPort`, tests `Mcp{Http,Schema,Tokens,Protocol,Service}_test`. Not compiled locally (no local builds); CI is the check. Not yet tried with a real MCP client. |
+| 0 | Done 2026-11-07 (`32171ded1`): `launcher/mcp/*`, `ui/pages/global/McpPage.*`, settings `McpEnabled`/`McpPort`, tests `Mcp{Http,Schema,Tokens,Protocol,Service}_test`. CI green on Linux x64/arm64, Windows MSVC x64/arm64 and MinGW. Not yet tried with a real MCP client. |
+| 1 | Written 2026-11-07: tools `instance_get`, `settings`, `search_content`, `content_versions`, `jobs`, `search_ops`, `call`, `batch`; ops `groups.list`, `components.list`, `components.available_versions`, `content.list`, `worlds.list`, `accounts.list`; `SettingsObject::settingIds()` (new public accessor, approved by the user 2026-11-07). Tests `Mcp{Ops,Jobs}_test`. |
+
+Decisions made in phase 1:
+- **Settings protection** (`McpSettingsTool.cpp`): secrets are redacted (`ProxyPass`, `ProxyUser`, API keys/tokens, client ids, and
+  any key matching token/password/secret/apikey/clientid); `Mcp*` and `*Bookmark` keys are read-only; "sensitive" keys (commands,
+  `JvmArgs`, `Env`, executable paths, download/upload/proxy URLs, data folders) are refused for agents, because changing one can run
+  code or redirect downloads. Phase 2's confirmation flow may relax "sensitive" to "ask the user"; secrets stay refused.
+- **batch** checks every op name and scope before running anything, validates each step's arguments after `$N` substitution,
+  and reports `isError` when a step failed and `continueOnError` was not set.
+- **jobs** are per token: a token sees and cancels only the jobs it started.
