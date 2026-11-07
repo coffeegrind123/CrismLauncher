@@ -152,6 +152,10 @@ void ImportPage::updateState()
                     // Have to use ensureString then use QUrl to get proper url encoding
                     auto dl_url = QUrl(data["downloadUrl"].toString(""));
                     if (!dl_url.isValid()) {
+                        // Distribution-blocked: the API omits the link but the CDN still serves the file
+                        dl_url = QUrl(FlameAPI::getCdnDownloadUrl(fileId.toInt(), fileName));
+                    }
+                    if (!dl_url.isValid()) {
                         CustomMessageBox::selectable(
                             this, tr("Error"),
                             tr("The modpack %1 is blocked for third-parties! Please download it manually.").arg(fileName),
