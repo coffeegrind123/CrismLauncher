@@ -9,6 +9,7 @@
 #include "Application.h"
 #include "BuildConfig.h"
 #include "FileSystem.h"
+#include "java/JavaInstallList.h"
 #include "java/JavaMetadata.h"
 #include "java/download/ArchiveDownloadTask.h"
 #include "java/download/ManifestDownloadTask.h"
