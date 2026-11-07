@@ -1,6 +1,6 @@
 # MCP server: agents manage the launcher over one HTTP endpoint
 
-Status (2026-11-08): plan confirmed; phases 0-2 merged and CI-verified, phase 3 in progress (see §11).
+Status (2026-11-08): plan confirmed; phases 0-3 merged and CI-verified, phase 4 written (see §11).
 
 Provisional decisions (asked 2026-11-07, no answer yet; recommended options taken, change any before phase 0):
 
@@ -234,7 +234,27 @@ with what was measured.
 | 1 | Done 2026-11-08 (`efbb05102`; its CI run hung in the jobs test, fixed and verified with phase 2): tools `instance_get`, `settings`, `search_content`, `content_versions`, `jobs`, `search_ops`, `call`, `batch`; ops `groups.list`, `components.list`, `components.available_versions`, `content.list`, `worlds.list`, `accounts.list`; `SettingsObject::settingIds()` (new public accessor, approved by the user 2026-11-07). Tests `Mcp{Ops,Jobs}_test`. |
 
 | 2 | Done 2026-11-08 (`2e51d9b14`): confirmations (`invokeTool` + `McpActivityBar` prompt), Stop/Resume, `install_content`, `create_instance`, write ops (instance, groups, components, content), `InstanceTask::UnattendedChoices` in the Flame/Modrinth/import tasks. |
-| 3 | Written 2026-11-08: `launch`, `logs`, ops `accounts.{set_default,set_for_instance,add_offline,remove,refresh,open_manager}`, `java.list_installs`. |
+| 3 | Done 2026-11-08 (`2306417f6`): `launch`, `logs`, ops `accounts.{set_default,set_for_instance,add_offline,remove,refresh,open_manager}`, `java.list_installs`. |
+| 4 | Written 2026-11-08: `files.*` (`5e82f0bc1`), `screenshots.*`, `window.screenshot`, `worlds.{rename,copy,backup,delete}`, `servers.{list,add,edit,remove}` (servers.dat code moved out of ServersPage into `minecraft/ServersDat.*`), `content.{check_updates,update}`, `instance.{export,copy}`, `pack.update`, MCP resources (api index, ops schema, instance summary/mods/latest log, guides) and prompts (build_modpack, fix_crash, update_instance, optimize). `java.{available,download}`. Not done: tasks extension and `subscriptions/listen` (jobs + polling cover them), MRTR elicitation (the launcher window asks). |
+
+| 5 | Written 2026-11-08: `--mcp-stdio` relay (`McpStdioRelay`), "stdio clients" switch and its token (`McpStdioEnabled`, `McpStdioTokenId`, `<data>/mcp/stdio.json`), `TokenStore::rotate`. |
+
+Decisions made in phase 5:
+- **The relay runs inside the launcher binary** (`--mcp-stdio`), handled in `Application`'s constructor right after the data
+  folder is chosen and before the single-instance check and logging; nothing but protocol lines reaches stdout. Stdio uses
+  native handles (`ReadFile`/`WriteFile`, `read`/`write`) so a Windows GUI-subsystem binary works when given pipes.
+- **The relay never handles credentials**: the launcher writes `stdio.json` (port + a token reserved for stdio clients,
+  owner-only) only while the user enables stdio clients and the endpoint listens, and removes it on exit. The secret is
+  rotated only when the file is stale, so a running relay keeps working across settings changes.
+- **Not running yet**: the relay starts the launcher once and waits up to 60 s for the endpoint; if stdio clients are off,
+  requests get a JSON-RPC error saying where to enable them.
+
+Decisions made in phase 4:
+- **Exports** only go to the user's downloads folder, named by `fileName`; an agent cannot write archives elsewhere.
+- **files.*** refuse `instance.cfg`, `mmc-pack.json` and `patches/` (they would bypass the settings and components
+  protections); overwriting an existing file is a destructive effect.
+- **Unattended pack updates** never delete worlds, keep the launcher's own rename of the instance, and fail when the old
+  version's file index is missing unless `allowDuplicateFiles` is set.
 
 Decisions made in phases 2-3:
 - **Confirmation lives in `invokeTool`**, driven by each tool's `effect` (per call when it depends on arguments) and the token's
