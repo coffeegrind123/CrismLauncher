@@ -593,6 +593,8 @@ set(MCP_SOURCES
     mcp/McpCommon.h
     mcp/McpCreateTool.cpp
     mcp/McpCreateTool.h
+    mcp/McpFileOps.cpp
+    mcp/McpFileOps.h
     mcp/McpGameTools.cpp
     mcp/McpGameTools.h
     mcp/McpHttp.cpp

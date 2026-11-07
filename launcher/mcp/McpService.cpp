@@ -11,6 +11,7 @@
 
 #include "BuildConfig.h"
 #include "FileSystem.h"
+#include "mcp/McpFileOps.h"
 #include "mcp/McpGameTools.h"
 #include "mcp/McpInstanceTools.h"
 #include "mcp/McpLauncherTools.h"
@@ -138,6 +139,7 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
     Mcp::registerInstanceOps(m_ops);
     Mcp::registerWriteOps(m_ops);
     Mcp::registerGameOps(m_ops);
+    Mcp::registerFileOps(m_ops);
     Mcp::registerOpTools(m_tools, &m_ops);
 
     Mcp::ServerInfo info;
