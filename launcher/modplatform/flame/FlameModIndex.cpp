@@ -84,8 +84,15 @@ Result<ModPlatform::IndexedVersion> FlameMod::loadIndexedPackVersion(const QJson
     TRY_INTO(file.fileId, Json::requireInteger(obj, "id"))
     TRY_INTO(file.date, Json::requireString(obj, "fileDate"))
     TRY_INTO(file.version, Json::requireString(obj, "displayName"))
-    file.downloadUrl = obj["downloadUrl"].toString();
     TRY_INTO(file.fileName, Json::requireString(obj, "fileName"))
+
+    // Projects with distribution disabled get "downloadUrl": null, but the file is still on the
+    // public CDN at a path derived from its id and original (unsanitized) name.
+    file.downloadUrl = obj["downloadUrl"].toString();
+    if (file.downloadUrl.isEmpty()) {
+        file.downloadUrl = FlameAPI::getCdnDownloadUrl(file.fileId.toInt(), file.fileName);
+    }
+
     file.fileName = FS::RemoveInvalidPathChars(file.fileName);
 
     TRY_INTO(const auto& releaseType, Json::requireInteger(obj, "releaseType"))

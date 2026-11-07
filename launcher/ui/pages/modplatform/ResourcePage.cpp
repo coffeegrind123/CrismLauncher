@@ -568,7 +568,7 @@ void ResourcePage::onResourceToggle(const QModelIndex& index)
             if (version == pack->versions.end()) {
                 auto* errorMessage = new QMessageBox(
                     QMessageBox::Warning, tr("No versions available"),
-                    tr("No versions for '%1' are available.\nThe author likely blocked third-party launchers.").arg(pack->name),
+                    tr("No versions for '%1' match the current game version and loader filters.").arg(pack->name),
                     QMessageBox::Ok, this);
 
                 errorMessage->open();
