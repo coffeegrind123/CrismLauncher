@@ -76,6 +76,8 @@ class TokenStore {
     static QByteArray hashSecret(const QString& secret);
 
    private:
+    static QString newSecret();
+
     QString m_path;
     QList<TokenInfo> m_tokens;
 };

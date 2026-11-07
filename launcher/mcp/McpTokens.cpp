@@ -181,13 +181,17 @@ Result<> TokenStore::save() const
     return {};
 }
 
-std::pair<TokenInfo, QString> TokenStore::create(const QString& name, Scopes scopes, ConfirmPolicy policy)
+QString TokenStore::newSecret()
 {
     std::array<quint32, SECRET_BYTES / sizeof(quint32)> words{};
     QRandomGenerator::system()->fillRange(words.data(), static_cast<qsizetype>(words.size()));
     const QByteArray random(reinterpret_cast<const char*>(words.data()), SECRET_BYTES);
-    const auto secret =
-        QString(SECRET_PREFIX) + QString::fromLatin1(random.toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
+    return QString(SECRET_PREFIX) + QString::fromLatin1(random.toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
+}
+
+std::pair<TokenInfo, QString> TokenStore::create(const QString& name, Scopes scopes, ConfirmPolicy policy)
+{
+    const auto secret = newSecret();
 
     TokenInfo token;
     token.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -222,9 +226,8 @@ std::optional<QString> TokenStore::rotate(const QString& id)
 {
     for (auto& token : m_tokens) {
         if (token.id == id) {
-            const auto [fresh, secret] = create(token.name, token.scopes, token.policy);
-            m_tokens.removeLast();
-            token.hash = fresh.hash;
+            const auto secret = newSecret();
+            token.hash = hashSecret(secret);
             return secret;
         }
     }
