@@ -588,6 +588,23 @@ set(ATLAUNCHER_SOURCES
     modplatform/atlauncher/ATLShareCode.h
 )
 
+set(MCP_SOURCES
+    mcp/McpHttp.cpp
+    mcp/McpHttp.h
+    mcp/McpLauncherTools.cpp
+    mcp/McpLauncherTools.h
+    mcp/McpProtocol.cpp
+    mcp/McpProtocol.h
+    mcp/McpSchema.cpp
+    mcp/McpSchema.h
+    mcp/McpService.cpp
+    mcp/McpService.h
+    mcp/McpTokens.cpp
+    mcp/McpTokens.h
+    mcp/McpTool.cpp
+    mcp/McpTool.h
+)
+
 set(LINKEXE_SOURCES
     console/WindowsConsole.h
     console/WindowsConsole.cpp
@@ -777,6 +794,7 @@ set(LOGIC_SOURCES
     ${PACKWIZ_SOURCES}
     ${TECHNIC_SOURCES}
     ${ATLAUNCHER_SOURCES}
+    ${MCP_SOURCES}
 )
 
 if(APPLE AND Launcher_ENABLE_UPDATER)
@@ -957,6 +975,8 @@ SET(LAUNCHER_SOURCES
     ui/pages/global/ProxyPage.h
     ui/pages/global/APIPage.cpp
     ui/pages/global/APIPage.h
+    ui/pages/global/McpPage.cpp
+    ui/pages/global/McpPage.h
 
     # GUI - platform pages
     ui/pages/modplatform/CustomPage.cpp

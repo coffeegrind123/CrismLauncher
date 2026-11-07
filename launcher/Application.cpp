@@ -58,6 +58,7 @@
 
 #include "ui/pages/BasePageProvider.h"
 #include "ui/pages/global/APIPage.h"
+#include "ui/pages/global/McpPage.h"
 #include "ui/pages/global/AccountListPage.h"
 #include "ui/pages/global/AppearancePage.h"
 #include "ui/pages/global/ExternalToolsPage.h"
@@ -108,6 +109,7 @@
 #include <utility>
 
 #include "InstanceList.h"
+#include "mcp/McpService.h"
 #include "MTPixmapCache.h"
 
 #include <minecraft/auth/AccountList.h>
@@ -939,6 +941,8 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         // Custom Technic Client ID
         m_settings->registerSetting("TechnicClientID", "");
 
+        McpService::registerSettings(m_settings.get());
+
         // Init page provider
         {
             m_globalSettingsProvider = std::make_unique<GenericPageProvider>(tr("Settings"));
@@ -949,6 +953,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
             m_globalSettingsProvider->addPage<JavaPage>();
             m_globalSettingsProvider->addPage<AccountListPage>();
             m_globalSettingsProvider->addPage<APIPage>();
+            m_globalSettingsProvider->addPage<McpPage>();
             m_globalSettingsProvider->addPage<ExternalToolsPage>();
             m_globalSettingsProvider->addPage<ProxyPage>();
         }
@@ -1107,6 +1112,9 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     updateCapabilities();
 
     detectLibraries();
+
+    // After instances and accounts exist, since its tools read them; it opens no socket unless the user enabled it
+    m_mcp = std::make_unique<McpService>(m_settings.get(), m_dataPath);
 
     // check update locks
     {

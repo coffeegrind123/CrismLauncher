@@ -61,6 +61,7 @@ class QFile;
 class HttpMetaCache;
 class SettingsObject;
 class InstanceList;
+class McpService;
 class AccountList;
 class IconList;
 class QNetworkAccessManager;
@@ -136,6 +137,9 @@ class Application : public QApplication {
     IconList* icons() const { return m_icons.get(); }
 
     AccountList* accounts() const { return m_accounts.get(); }
+
+    // The optional MCP endpoint for AI agents; null only during early startup
+    McpService* mcp() const { return m_mcp.get(); }
 
     Status status() const { return m_status; }
 
@@ -257,6 +261,8 @@ class Application : public QApplication {
     std::unique_ptr<TranslationsModel> m_translations;
     std::unique_ptr<GenericPageProvider> m_globalSettingsProvider;
     std::unique_ptr<ThemeManager> m_themeManager;
+    // Declared after the models its tools use, so it is destroyed (and stops serving) first
+    std::unique_ptr<McpService> m_mcp;
 
     QMap<QString, std::shared_ptr<BaseProfilerFactory>> m_profilers;
 
