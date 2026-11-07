@@ -1,6 +1,6 @@
 # MCP server: agents manage the launcher over one HTTP endpoint
 
-Status (2026-11-07): plan confirmed; **phase 0 written, verified only through CI** (see §11).
+Status (2026-11-08): plan confirmed; phases 0-2 merged and CI-verified, phase 3 in progress (see §11).
 
 Provisional decisions (asked 2026-11-07, no answer yet; recommended options taken, change any before phase 0):
 
@@ -231,7 +231,26 @@ with what was measured.
 | Phase | State |
 |---|---|
 | 0 | Done 2026-11-07 (`32171ded1`): `launcher/mcp/*`, `ui/pages/global/McpPage.*`, settings `McpEnabled`/`McpPort`, tests `Mcp{Http,Schema,Tokens,Protocol,Service}_test`. CI green on Linux x64/arm64, Windows MSVC x64/arm64 and MinGW. Not yet tried with a real MCP client. |
-| 1 | Written 2026-11-07: tools `instance_get`, `settings`, `search_content`, `content_versions`, `jobs`, `search_ops`, `call`, `batch`; ops `groups.list`, `components.list`, `components.available_versions`, `content.list`, `worlds.list`, `accounts.list`; `SettingsObject::settingIds()` (new public accessor, approved by the user 2026-11-07). Tests `Mcp{Ops,Jobs}_test`. |
+| 1 | Done 2026-11-08 (`efbb05102`; its CI run hung in the jobs test, fixed and verified with phase 2): tools `instance_get`, `settings`, `search_content`, `content_versions`, `jobs`, `search_ops`, `call`, `batch`; ops `groups.list`, `components.list`, `components.available_versions`, `content.list`, `worlds.list`, `accounts.list`; `SettingsObject::settingIds()` (new public accessor, approved by the user 2026-11-07). Tests `Mcp{Ops,Jobs}_test`. |
+
+| 2 | Done 2026-11-08 (`2e51d9b14`): confirmations (`invokeTool` + `McpActivityBar` prompt), Stop/Resume, `install_content`, `create_instance`, write ops (instance, groups, components, content), `InstanceTask::UnattendedChoices` in the Flame/Modrinth/import tasks. |
+| 3 | Written 2026-11-08: `launch`, `logs`, ops `accounts.{set_default,set_for_instance,add_offline,remove,refresh,open_manager}`, `java.list_installs`. |
+
+Decisions made in phases 2-3:
+- **Confirmation lives in `invokeTool`**, driven by each tool's `effect` (per call when it depends on arguments) and the token's
+  policy; `call`/`batch` set `delegatesConfirmation` so only the inner op asks. No way to ask (no main window) counts as "no".
+  Questions are non-modal and denied after 2 minutes. MRTR elicitation is not implemented yet: the launcher window is the
+  only channel, which matches "the human is at the launcher".
+- **Unattended pack installs** always create a separate instance (never update one in place), enable only the optional files
+  named, keep non-platform files only for `source=import` (which is confirmed as destructive), and fail instead of showing
+  the blocked-mods dialog.
+- **Agent-made NetJobs set `askRetry(false)`**: a failed request would otherwise open a non-modal "retry?" dialog and leave the
+  agent waiting on the user. Downloads inside launcher tasks (ResourceDownloadTask, meta loads) keep the dialog: the human
+  decides there.
+- **Microsoft sign-in stays with the user**: `accounts.open_manager` opens the account manager; agents never handle credentials.
+- **Launch shows its usual dialogs** (re-authentication, missing character) to the user; the tool returns once launching began.
+- **Task lifetime**: `shared_qobject_ptr` deletes with `deleteLater()`, so releasing a task inside its own signal is safe.
+  Never park a `Task::Ptr` in a posted lambda: destroying it during application shutdown deadlocked the test process (phase 1 CI).
 
 Decisions made in phase 1:
 - **Settings protection** (`McpSettingsTool.cpp`): secrets are redacted (`ProxyPass`, `ProxyUser`, API keys/tokens, client ids, and
