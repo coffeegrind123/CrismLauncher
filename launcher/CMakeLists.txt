@@ -317,6 +317,8 @@ set(MINECRAFT_SOURCES
     minecraft/VersionFilterData.h
     minecraft/VersionFilterData.cpp
     minecraft/World.h
+    minecraft/ServersDat.cpp
+    minecraft/ServersDat.h
     minecraft/World.cpp
     minecraft/WorldList.h
     minecraft/WorldList.cpp
