@@ -355,6 +355,7 @@ void registerOpTools(ToolRegistry& tools, const ToolRegistry* ops)
         tool.annotations.destructive = true;
         tool.annotations.idempotent = false;
         tool.scope = Scope::Read;
+        tool.delegatesConfirmation = true;
         tool.handler = [ops](const CallContext& context, const QJsonObject& arguments, const ToolReply& reply) {
             callOp(ops, context, arguments, reply);
         };
@@ -391,6 +392,7 @@ void registerOpTools(ToolRegistry& tools, const ToolRegistry* ops)
         tool.annotations.destructive = true;
         tool.annotations.idempotent = false;
         tool.scope = Scope::Read;
+        tool.delegatesConfirmation = true;
         tool.handler = [ops](const CallContext& context, const QJsonObject& arguments, const ToolReply& reply) {
             runBatch(ops, context, arguments, reply);
         };

@@ -26,7 +26,14 @@ struct CallContext {
 
     // Set when the client went away or cancelled; long tools check it and stop
     std::shared_ptr<bool> cancelled = std::make_shared<bool>(false);
+
+    // Asks the human to allow `action` (one sentence, e.g. "Delete instance 'Foo'"). Unset means nobody can answer, which
+    // counts as a refusal.
+    std::function<void(const QString& action, std::function<void(bool allowed, const QString& reason)>)> confirm;
 };
+
+// What a call does, which decides whether the token's policy asks the human first
+enum class Effect { Read, Write, Destructive };
 
 struct ToolResult {
     QJsonValue structured;     // structuredContent; must match the tool's outputSchema
@@ -61,6 +68,15 @@ struct Tool {
     bool alwaysLoad = false;
     ToolHandler handler;
 
+    // Per-call effect when it depends on the arguments (settings: list reads, set writes); by default from annotations
+    std::function<Effect(const QJsonObject& arguments)> effect;
+    // The sentence the human sees when asked to confirm; by default the title and the arguments
+    std::function<QString(const QJsonObject& arguments)> describeAction;
+    // call and batch run ops that confirm themselves; asking for the wrapper too would ask twice
+    bool delegatesConfirmation = false;
+
+    Effect effectFor(const QJsonObject& arguments) const;
+
     QJsonObject describe() const;
 };
 
@@ -78,8 +94,10 @@ class ToolRegistry {
     QList<Tool> m_tools;
 };
 
-// Runs a tool (or a catalog op) the way tools/call does: scope check, argument validation against inputSchema, and
-// an exception guard. `reply` is called exactly once unless the handler itself never replies.
+bool needsConfirmation(Effect effect, ConfirmPolicy policy);
+
+// Runs a tool (or a catalog op) the way tools/call does: scope check, argument validation against inputSchema, the
+// token's confirmation policy, and an exception guard. `reply` is called exactly once unless the handler itself never replies.
 void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject& arguments, const ToolReply& reply);
 
 // Shared by error messages: the nearest strings by edit distance, best first

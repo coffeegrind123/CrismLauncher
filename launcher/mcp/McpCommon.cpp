@@ -177,11 +177,9 @@ void runTask(const Task::Ptr& task, std::function<void(bool ok, const QString& e
         if (!*keepAlive) {
             return;
         }
-        Task::Ptr held = *keepAlive;
+        // Safe inside the task's own signal: shared_qobject_ptr deletes with deleteLater()
         keepAlive->reset();
         done(ok, error);
-        // This runs inside the task's own signal; release it only once that emission has returned
-        QTimer::singleShot(0, [held] { (void)held; });
     };
     QObject::connect(task.get(), &Task::succeeded, task.get(), [report] { report(true, {}); });
     QObject::connect(task.get(), &Task::failed, task.get(), [report](const QString& reason) { report(false, reason); });

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "McpJobs.h"
 
-#include <QTimer>
 #include <QUuid>
 
 #include <utility>
@@ -104,8 +103,8 @@ void JobRegistry::finish(const QString& id, JobInfo::State state, const QString&
     if (state == JobInfo::State::Succeeded && it->onSuccess) {
         it->info.result = it->onSuccess();
     }
-    // Called from the task's own signal: release it only after that emission has returned
-    QTimer::singleShot(0, [task = std::exchange(it->task, Task::Ptr())] { (void)task; });
+    // Safe inside the task's own signal: shared_qobject_ptr deletes with deleteLater()
+    it->task.reset();
 
     const auto info = it->info;
     const auto waiters = std::exchange(it->waiters, {});

@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QString>
 
+#include <functional>
 #include <memory>
 
 #include "mcp/McpHttp.h"
@@ -15,6 +16,13 @@
 #include "mcp/McpTool.h"
 
 class SettingsObject;
+
+// What the human is asked when an agent wants to make a change the token's policy reserves for them
+struct McpConfirmRequest {
+    QString tokenName;
+    QString clientName;
+    QString action;
+};
 
 // The launcher's MCP endpoint: http://127.0.0.1:<port>/mcp. Off until the user enables it; while off no socket is open.
 //
@@ -47,6 +55,18 @@ class McpService : public QObject {
     Result<> saveTokens();
 
     const QList<Mcp::CallRecord>& recentCalls() const { return m_recentCalls; }
+
+    // The UI installs this to put confirmation questions in front of the user; `answer` must be called exactly once
+    using Prompter = std::function<void(const McpConfirmRequest& request, std::function<void(bool allowed)> answer)>;
+    void setPrompter(Prompter prompter) { m_prompter = std::move(prompter); }
+
+    // The Stop button: cancels agents' running jobs and refuses their calls until resumed
+    void stopAgents();
+    void resumeAgents();
+    bool isPaused() const { return m_paused; }
+    int activeCalls() const { return m_activeCalls; }
+    // The latest call that started, for the activity bar
+    const Mcp::CallRecord& lastStarted() const { return m_lastStarted; }
     const Mcp::ToolRegistry& tools() const { return m_tools; }
     const Mcp::ToolRegistry& ops() const { return m_ops; }
     Mcp::JobRegistry* jobs() { return &m_jobs; }
@@ -54,6 +74,7 @@ class McpService : public QObject {
    signals:
     void stateChanged();
     void callRecorded(const Mcp::CallRecord& record);
+    void activityChanged();
 
    private:
     void handleHttp(const Mcp::Http::Request& request, const Mcp::Http::ResponderPtr& responder);
@@ -72,6 +93,10 @@ class McpService : public QObject {
     Mcp::Http::Server* m_server = nullptr;
     QString m_lastError;
     QList<Mcp::CallRecord> m_recentCalls;
+    Prompter m_prompter;
+    bool m_paused = false;
+    int m_activeCalls = 0;
+    Mcp::CallRecord m_lastStarted;
     // Per token: start of the current one-minute window and requests seen in it
     QHash<QString, std::pair<qint64, int>> m_rate;
 };

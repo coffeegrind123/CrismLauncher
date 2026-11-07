@@ -111,6 +111,7 @@
 #include "ui/themes/ITheme.h"
 #include "ui/themes/ThemeManager.h"
 #include "ui/widgets/EditableLabel.h"
+#include "ui/widgets/McpActivityBar.h"
 
 #include "minecraft/PackProfile.h"
 #include "minecraft/VersionFile.h"
@@ -376,6 +377,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     m_statusCenter = new QLabel(tr("Total playtime: 0s"), this);
     statusBar()->addPermanentWidget(m_statusLeft, 1);
     statusBar()->addPermanentWidget(m_statusCenter, 0);
+    if (auto* mcp = APPLICATION->mcp()) {
+        statusBar()->addPermanentWidget(new McpActivityBar(mcp, this), 0);
+    }
 
     // Add "manage accounts" button, right align
     QWidget* spacer = new QWidget();

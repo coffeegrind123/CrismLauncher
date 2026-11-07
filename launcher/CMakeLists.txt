@@ -591,6 +591,8 @@ set(ATLAUNCHER_SOURCES
 set(MCP_SOURCES
     mcp/McpCommon.cpp
     mcp/McpCommon.h
+    mcp/McpCreateTool.cpp
+    mcp/McpCreateTool.h
     mcp/McpHttp.cpp
     mcp/McpHttp.h
     mcp/McpInstanceTools.cpp
@@ -615,6 +617,8 @@ set(MCP_SOURCES
     mcp/McpTokens.h
     mcp/McpTool.cpp
     mcp/McpTool.h
+    mcp/McpWriteOps.cpp
+    mcp/McpWriteOps.h
 )
 
 set(LINKEXE_SOURCES
@@ -1195,6 +1199,8 @@ SET(LAUNCHER_SOURCES
     ui/widgets/JavaSettingsWidget.cpp
     ui/widgets/MirrorSettingsWidget.h
     ui/widgets/MirrorSettingsWidget.cpp
+    ui/widgets/McpActivityBar.cpp
+    ui/widgets/McpActivityBar.h
     ui/widgets/EditableLabel.h
     ui/widgets/EditableLabel.cpp
 

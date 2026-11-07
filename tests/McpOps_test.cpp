@@ -14,12 +14,25 @@ class McpOpsTest : public QObject {
     ToolRegistry m_tools;
     QStringList m_ran;
 
-    ToolResult run(const QString& toolName, const QJsonObject& arguments, Scopes scopes = Scope::Read)
+    QStringList m_asked;
+
+    ToolResult run(const QString& toolName,
+                   const QJsonObject& arguments,
+                   Scopes scopes = Scope::Read,
+                   ConfirmPolicy policy = ConfirmPolicy::NeverAsk,
+                   std::optional<bool> answer = std::nullopt)
     {
         CallContext context;
         context.token.id = "t";
         context.token.scopes = scopes;
+        context.token.policy = policy;
         context.progress = [](double, std::optional<double>, const QString&) {};
+        if (answer) {
+            context.confirm = [this, allowed = *answer](const QString& action, std::function<void(bool, const QString&)> done) {
+                m_asked.append(action);
+                done(allowed, allowed ? QString() : QString("declined"));
+            };
+        }
         ToolResult out;
         bool replied = false;
         invokeTool(*m_tools.find(toolName), context, arguments, [&out, &replied](const ToolResult& result) {
@@ -85,7 +98,11 @@ class McpOpsTest : public QObject {
         registerOpTools(m_tools, &m_ops);
     }
 
-    void init() { m_ran.clear(); }
+    void init()
+    {
+        m_ran.clear();
+        m_asked.clear();
+    }
 
     void references_data()
     {
@@ -194,6 +211,51 @@ class McpOpsTest : public QObject {
         QVERIFY(result.isError);
         result = run("call", QJsonObject{ { "op", "files.write" } }, Scope::Read | Scope::Files);
         QVERIFY(!result.isError);
+    }
+
+    void confirmationPolicy()
+    {
+        const auto write = QJsonObject{ { "op", "files.write" } };
+        const auto scopes = Scope::Read | Scope::Files;
+
+        // Destructive op, default policy, nobody to ask: refused, nothing ran
+        auto result = run("call", write, scopes, ConfirmPolicy::AskDestructive);
+        QVERIFY(result.isError);
+        QVERIFY(m_ran.isEmpty());
+
+        // The user says no
+        result = run("call", write, scopes, ConfirmPolicy::AskDestructive, false);
+        QVERIFY(result.isError);
+        QVERIFY(result.text.contains("did not allow"));
+        QVERIFY(m_ran.isEmpty());
+        QCOMPARE(m_asked.size(), 1);
+
+        // The user says yes; `call` itself never asks, so there is exactly one question
+        m_asked.clear();
+        result = run("call", write, scopes, ConfirmPolicy::AskDestructive, true);
+        QVERIFY(!result.isError);
+        QCOMPARE(m_ran, QStringList{ "files.write" });
+        QCOMPARE(m_asked.size(), 1);
+
+        // Reads never ask, even under ask_all_writes
+        m_asked.clear();
+        result = run("call", QJsonObject{ { "op", "items.make" } }, scopes, ConfirmPolicy::AskAllWrites, false);
+        QVERIFY(!result.isError);
+        QVERIFY(m_asked.isEmpty());
+
+        // never_ask runs without a question
+        result = run("call", write, scopes, ConfirmPolicy::NeverAsk);
+        QVERIFY(!result.isError);
+        QVERIFY(m_asked.isEmpty());
+    }
+
+    void needsConfirmationTable()
+    {
+        QVERIFY(!needsConfirmation(Effect::Read, ConfirmPolicy::AskAllWrites));
+        QVERIFY(needsConfirmation(Effect::Write, ConfirmPolicy::AskAllWrites));
+        QVERIFY(!needsConfirmation(Effect::Write, ConfirmPolicy::AskDestructive));
+        QVERIFY(needsConfirmation(Effect::Destructive, ConfirmPolicy::AskDestructive));
+        QVERIFY(!needsConfirmation(Effect::Destructive, ConfirmPolicy::NeverAsk));
     }
 
     void searchOps()

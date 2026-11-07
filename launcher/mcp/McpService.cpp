@@ -14,6 +14,7 @@
 #include "mcp/McpInstanceTools.h"
 #include "mcp/McpLauncherTools.h"
 #include "mcp/McpOps.h"
+#include "mcp/McpWriteOps.h"
 #include "settings/SettingsObject.h"
 
 namespace {
@@ -134,6 +135,7 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
 
     Mcp::registerLauncherTools(m_tools);
     Mcp::registerInstanceOps(m_ops);
+    Mcp::registerWriteOps(m_ops);
     Mcp::registerOpTools(m_tools, &m_ops);
 
     Mcp::ServerInfo info;
@@ -142,7 +144,35 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
     info.version = BuildConfig.printableVersionString();
     info.instructions = instructions();
     m_protocol = std::make_unique<Mcp::Protocol>(&m_tools, info);
-    m_protocol->onToolCall = [this](const Mcp::CallRecord& record) { recordCall(record); };
+    m_protocol->onToolCall = [this](const Mcp::CallRecord& record) {
+        m_activeCalls = std::max(0, m_activeCalls - 1);
+        recordCall(record);
+        emit activityChanged();
+    };
+    m_protocol->onToolStart = [this](const Mcp::CallRecord& record) {
+        ++m_activeCalls;
+        m_lastStarted = record;
+        emit activityChanged();
+    };
+    m_protocol->gate = [this]() -> std::optional<QString> {
+        if (m_paused) {
+            return tr("The user stopped AI agents in the launcher.");
+        }
+        return std::nullopt;
+    };
+    m_protocol->prepareContext = [this](Mcp::CallContext& context) {
+        const auto tokenName = context.token.name;
+        const auto clientName = context.clientName;
+        context.confirm = [this, tokenName, clientName](const QString& action, std::function<void(bool, const QString&)> done) {
+            if (!m_prompter) {
+                done(false, tr("the launcher window is not available to ask the user"));
+                return;
+            }
+            m_prompter(McpConfirmRequest{ tokenName, clientName, action },
+                       [done](bool allowed) { done(allowed, allowed ? QString() : tr("the user declined")); });
+        };
+    };
+    connect(&m_jobs, &Mcp::JobRegistry::jobChanged, this, &McpService::activityChanged);
 
     m_server = new Mcp::Http::Server([this](const auto& request, const auto& responder) { handleHttp(request, responder); }, this);
 
@@ -211,6 +241,21 @@ QString McpService::endpointUrl() const
 Result<> McpService::saveTokens()
 {
     return m_tokens.save();
+}
+
+void McpService::stopAgents()
+{
+    m_paused = true;
+    m_jobs.cancelAll();
+    qInfo() << "MCP: the user stopped agents";
+    emit activityChanged();
+}
+
+void McpService::resumeAgents()
+{
+    m_paused = false;
+    qInfo() << "MCP: the user resumed agents";
+    emit activityChanged();
 }
 
 bool McpService::allowRequest(const QString& tokenId)

@@ -88,6 +88,12 @@ class Protocol {
 
     // Every tools/call, after it finished; feeds the activity log
     std::function<void(const CallRecord&)> onToolCall;
+    // Every tools/call, as it starts (the activity bar shows what agents are doing)
+    std::function<void(const CallRecord&)> onToolStart;
+    // Fills in what only the host knows, such as how to ask the human for confirmation
+    std::function<void(CallContext&)> prepareContext;
+    // A reason to refuse every call (the user pressed Stop), or nothing
+    std::function<std::optional<QString>()> gate;
 
    private:
     struct Request {

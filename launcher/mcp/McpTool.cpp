@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "McpTool.h"
 
+#include <QJsonDocument>
+
 #include <algorithm>
 #include <exception>
 #include <vector>
@@ -88,6 +90,42 @@ QStringList ToolRegistry::suggest(const QString& name) const
     return closestMatches(name, names);
 }
 
+Effect Tool::effectFor(const QJsonObject& arguments) const
+{
+    if (effect) {
+        return effect(arguments);
+    }
+    if (annotations.readOnly) {
+        return Effect::Read;
+    }
+    return annotations.destructive ? Effect::Destructive : Effect::Write;
+}
+
+bool needsConfirmation(Effect effect, ConfirmPolicy policy)
+{
+    switch (policy) {
+        case ConfirmPolicy::NeverAsk:
+            return false;
+        case ConfirmPolicy::AskAllWrites:
+            return effect != Effect::Read;
+        case ConfirmPolicy::AskDestructive:
+            return effect == Effect::Destructive;
+    }
+    return true;
+}
+
+namespace {
+QString defaultDescription(const Tool& tool, const QJsonObject& arguments)
+{
+    auto text = QString::fromUtf8(QJsonDocument(arguments).toJson(QJsonDocument::Compact));
+    constexpr int maxChars = 300;
+    if (text.size() > maxChars) {
+        text = text.left(maxChars) + QChar(0x2026);
+    }
+    return QString("%1 %2").arg(tool.title.isEmpty() ? tool.name : tool.title, text);
+}
+}  // namespace
+
 void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject& arguments, const ToolReply& reply)
 {
     if (!context.token.scopes.testFlag(tool.scope)) {
@@ -100,11 +138,32 @@ void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject&
                                 "Check the inputSchema and call again."));
         return;
     }
-    try {
-        tool.handler(context, arguments, reply);
-    } catch (const std::exception& e) {
-        reply(ToolResult::error(QString("Internal error in %1: %2").arg(tool.name, QString::fromUtf8(e.what()))));
+
+    auto run = [tool, context, arguments, reply] {
+        try {
+            tool.handler(context, arguments, reply);
+        } catch (const std::exception& e) {
+            reply(ToolResult::error(QString("Internal error in %1: %2").arg(tool.name, QString::fromUtf8(e.what()))));
+        }
+    };
+
+    if (tool.delegatesConfirmation || !needsConfirmation(tool.effectFor(arguments), context.token.policy)) {
+        run();
+        return;
     }
+    if (!context.confirm) {
+        reply(ToolResult::error(QString("%1 needs the user's confirmation, and nobody can be asked here.").arg(tool.name)));
+        return;
+    }
+    const auto action = tool.describeAction ? tool.describeAction(arguments) : defaultDescription(tool, arguments);
+    context.confirm(action, [run, reply, name = tool.name](bool allowed, const QString& reason) {
+        if (!allowed) {
+            reply(ToolResult::error(QString("The user did not allow %1%2").arg(name, reason.isEmpty() ? QString(".") : ": " + reason),
+                                    "Do not retry the same change unless the user asks for it."));
+            return;
+        }
+        run();
+    });
 }
 
 namespace {

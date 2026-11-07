@@ -334,6 +334,18 @@ void Protocol::callTool(const Request& request, const Incoming& incoming, const 
         context.progress = [](double, std::optional<double>, const QString&) {};
     }
 
+    if (gate) {
+        if (const auto reason = gate()) {
+            reply(ToolResult::error(*reason, "Wait until the user resumes agents in the launcher."));
+            return;
+        }
+    }
+    if (prepareContext) {
+        prepareContext(context);
+    }
+    if (onToolStart) {
+        onToolStart(record);
+    }
     invokeTool(*tool, context, arguments, reply);
 }
 

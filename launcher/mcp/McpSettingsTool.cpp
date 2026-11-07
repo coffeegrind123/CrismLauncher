@@ -316,6 +316,15 @@ void registerSettingsTool(ToolRegistry& registry)
     // Reading needs only `read`; set checks the `settings` scope itself
     tool.scope = Scope::Read;
     tool.handler = settingsTool;
+    tool.effect = [](const QJsonObject& arguments) { return arguments.value("action").toString() == "set" ? Effect::Write : Effect::Read; };
+    tool.describeAction = [](const QJsonObject& arguments) {
+        QStringList changes;
+        const auto values = arguments.value("values").toObject();
+        for (auto it = values.begin(); it != values.end(); ++it) {
+            changes.append(QString("%1 = %2").arg(it.key(), it.value().toVariant().toString()));
+        }
+        return QString("Change settings of %1: %2").arg(arguments.value("target").toString(LAUNCHER_TARGET), changes.join(", "));
+    };
     registry.add(std::move(tool));
 }
 
