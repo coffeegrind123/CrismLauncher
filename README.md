@@ -25,6 +25,15 @@
 - Offline accounts work without owning Minecraft or adding a Microsoft account, and game files download without any account
 - authlib-injector accounts: log in to Ely.by, LittleSkin, Blessing Skin, Drasl or any Yggdrasil-compatible server (Accounts → Add authlib-injector). The agent is downloaded, verified and injected automatically, and skins can be changed where the server allows it. Fjord Launcher account files load as-is
 
+**Mod downloads (CurseForge tab)**
+- Modpacks and mods whose authors disabled third-party downloads appear and install in the CurseForge tab too, instead of showing "No version available"
+
+**AI agents (MCP)**
+- Optional (Settings → AI agents (MCP), off by default): an [MCP](https://modelcontextprotocol.io) endpoint on `127.0.0.1` lets AI agents such as Claude Code, Cursor or Claude Desktop manage the launcher: list and create instances, search Modrinth and CurseForge and install mods with their dependencies, update mods and modpacks, change settings, launch the game and read its logs and crash reports, manage worlds, servers, screenshots, accounts and Java
+- Each agent gets its own token with chosen permissions (read, instances, content, launch, settings, accounts, files). By default the launcher asks you before destructive changes, a status-bar strip shows what agents are doing, and Stop cancels them
+- Agents never see account tokens, API keys or passwords, and settings that could run programs or redirect downloads stay yours to change
+- Claude Code: `claude mcp add --transport http crism-launcher http://127.0.0.1:<port>/mcp --header "Authorization: Bearer <token>"` (the settings page shows the exact command when you create a token). Claude Desktop and other clients that start a command: enable stdio clients on the same page and paste the copied config
+
 **Download mirror**
 - Optional (Settings → Services): fetch Minecraft, libraries, assets, Java, Forge and NeoForge from BMCLAPI or a compatible mirror, falling back to the official servers on any failure. Mirrored files are verified against the official checksums
 
