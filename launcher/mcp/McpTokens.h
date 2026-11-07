@@ -64,6 +64,8 @@ class TokenStore {
     std::pair<TokenInfo, QString> create(const QString& name, Scopes scopes, ConfirmPolicy policy);
     bool revoke(const QString& id);
     bool update(const QString& id, const QString& name, Scopes scopes, ConfirmPolicy policy);
+    // A new secret for an existing token (same scopes and policy); the old secret stops working
+    std::optional<QString> rotate(const QString& id);
 
     // Constant-time match of `secret` against every stored hash; records the use
     std::optional<TokenInfo> verify(const QString& secret);

@@ -46,6 +46,8 @@ class McpPage : public QWidget, public BasePage {
     QLabel* m_portLabel;
     QSpinBox* m_port;
     QLabel* m_status;
+    QCheckBox* m_stdio;
+    QPushButton* m_copyStdioConfig;
     QLabel* m_tokensLabel;
     QTreeWidget* m_tokenList;
     QPushButton* m_create;

@@ -304,7 +304,149 @@ void createInstance(const CallContext& context, const QJsonObject& arguments, co
         createFromImport(context, arguments, options, reply);
     }
 }
+
+// --- managed pack updates ---
+
+void updatePack(const CallContext& context, const QJsonObject& arguments, const ToolReply& reply)
+{
+    auto found = findInstance(arguments.value("instance").toString());
+    if (!found) {
+        reply(ToolResult::error(found.error()));
+        return;
+    }
+    auto* instance = *found;
+    if (!instance->isManagedPack()) {
+        reply(ToolResult::error(QString("'%1' was not installed from a modpack platform.").arg(instance->name())));
+        return;
+    }
+    const auto type = instance->getManagedPackType();
+    if (type != "modrinth" && type != "flame") {
+        reply(ToolResult::error(QString("Updating %1 packs is not supported here; use the launcher's Modpack page.").arg(type)));
+        return;
+    }
+    if (instance->isRunning()) {
+        reply(ToolResult::error(QString("'%1' is running; stop it before updating.").arg(instance->name())));
+        return;
+    }
+    const bool curseForge = type == "flame";
+    if (curseForge && !APPLICATION->capabilities().testFlag(Application::SupportsFlame)) {
+        reply(ToolResult::error("CurseForge is not available in this build (no API key)."));
+        return;
+    }
+    const ResourceAPI& api = curseForge ? static_cast<const ResourceAPI&>(FlameAPI::get()) : static_cast<const ResourceAPI&>(ModrinthAPI::get());
+
+    auto pack = std::make_shared<ModPlatform::IndexedPack>();
+    pack->addonId = instance->getManagedPackID();
+    pack->provider = curseForge ? ModPlatform::ResourceProvider::FLAME : ModPlatform::ResourceProvider::MODRINTH;
+    pack->resourceType = ModPlatform::ResourceType::Modpack;
+    const auto versionId = arguments.value("versionId").toString();
+    const bool allowDuplicates = arguments.value("allowDuplicateFiles").toBool(false);
+    const auto instanceId = instance->id();
+
+    auto keepAlive = std::make_shared<Task::Ptr>();
+    ResourceAPI::Callback<QVector<ModPlatform::IndexedVersion>> callbacks;
+    callbacks.onSucceed = [context, reply, versionId, allowDuplicates, instanceId, keepAlive](QVector<ModPlatform::IndexedVersion>& versions) {
+        keepAlive->reset();
+        auto* target = APPLICATION->instances()->getInstanceById(instanceId);
+        if (!target) {
+            reply(ToolResult::error("The instance disappeared."));
+            return;
+        }
+        std::optional<ModPlatform::IndexedVersion> chosen;
+        for (const auto& version : versions) {
+            if (!versionId.isEmpty() ? version.fileId.toString() == versionId
+                                     : version.versionType.value() == ModPlatform::IndexedVersionTypeValue::Release) {
+                chosen = version;
+                break;
+            }
+        }
+        if (!chosen && versionId.isEmpty() && !versions.isEmpty()) {
+            chosen = versions.first();
+        }
+        if (!chosen) {
+            reply(ToolResult::error(versionId.isEmpty() ? QString("The pack has no versions.") : QString("The pack has no version '%1'.").arg(versionId),
+                                    "content_versions kind=modpack lists them."));
+            return;
+        }
+        if (chosen->fileId.toString() == target->getManagedPackVersionID()) {
+            reply(ToolResult::ok(QJsonObject{ { "instance", instanceId }, { "upToDate", true }, { "version", chosen->version } },
+                                 QString("'%1' is already on %2.").arg(target->name(), chosen->version)));
+            return;
+        }
+        if (chosen->downloadUrl.isEmpty()) {
+            reply(ToolResult::error("That pack version has no download link."));
+            return;
+        }
+
+        // The same setup as the Modpack page's update button
+        QMap<QString, QString> extraInfo;
+        extraInfo.insert("pack_id", target->getManagedPackID());
+        extraInfo.insert("pack_version_id", chosen->fileId.toString());
+        extraInfo.insert("original_instance_id", target->id());
+        auto* task = new InstanceImportTask(QUrl(chosen->downloadUrl), true, nullptr, std::move(extraInfo));
+        task->setOriginalName(target->getManagedPackName(), chosen->version);
+        task->setConfirmUpdate(false);
+
+        Options options;
+        options.name = target->getManagedPackVersionName().isEmpty() ? target->name()
+                                                                     : QString(target->name()).replace(target->getManagedPackVersionName(), chosen->version);
+        options.group = APPLICATION->instances()->getInstanceGroup(target->id());
+        options.icon = target->iconKey();
+        options.choices.allowDuplicateFiles = allowDuplicates;
+        startCreation(context, task, options, QString("Update '%1' to %2").arg(target->name(), chosen->version), reply);
+    };
+    callbacks.onFail = [reply, keepAlive](const QString& reason, int) {
+        keepAlive->reset();
+        reply(ToolResult::error(QString("Could not list the pack's versions: %1").arg(reason)));
+    };
+    callbacks.onAbort = [reply, keepAlive] {
+        keepAlive->reset();
+        reply(ToolResult::error("Cancelled"));
+    };
+
+    auto task = api.getProjectVersions({ .pack = pack, .mcVersions = {}, .loaders = {}, .resourceType = ModPlatform::ResourceType::Modpack },
+                                       callbacks);
+    if (!task) {
+        reply(ToolResult::error("This platform has no version listing for modpacks."));
+        return;
+    }
+    if (auto* netJob = dynamic_cast<NetJob*>(task.get())) {
+        netJob->setAskRetry(false);
+    }
+    *keepAlive = task;
+    task->start();
+}
 }  // namespace
+
+void registerPackOps(ToolRegistry& ops)
+{
+    using namespace Schema;
+    Tool tool;
+    tool.name = "pack.update";
+    tool.description =
+        "Updates an instance installed from a Modrinth or CurseForge modpack to another version of that pack (default: its newest "
+        "release), in place, as a job: pack files are replaced, files the pack no longer ships are removed, worlds are kept. "
+        "content_versions kind=modpack with the instance's managedPack id lists versions. Refused while the game runs. If the "
+        "instance lacks the old version's file index, updating could leave old files behind; that fails unless "
+        "allowDuplicateFiles=true.";
+    tool.inputSchema = object({ { "instance", string("Instance id") },
+                                { "versionId", string("Pack version to move to (default newest release)") },
+                                { "allowDuplicateFiles", boolean("Update even without the old file index (default false)") } },
+                              { "instance" });
+    tool.scope = Scope::Instances;
+    tool.annotations.readOnly = false;
+    tool.annotations.destructive = true;
+    tool.annotations.openWorld = true;
+    tool.describeAction = [](const QJsonObject& a) {
+        const auto id = a.value("instance").toString();
+        auto* instance = APPLICATION->instances()->getInstanceById(id);
+        return QString("Update the modpack of '%1'%2 (pack files are replaced)")
+            .arg(instance ? instance->name() : id, a.value("versionId").toString().isEmpty() ? QString(" to its newest release")
+                                                                                              : QString(" to version %1").arg(a.value("versionId").toString()));
+    };
+    tool.handler = updatePack;
+    ops.add(tool);
+}
 
 void registerCreateTool(ToolRegistry& registry)
 {

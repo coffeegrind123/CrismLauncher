@@ -93,6 +93,24 @@ class McpTokensTest : public QObject {
         QVERIFY(!store.update("missing", "y", Scope::Read, ConfirmPolicy::NeverAsk));
     }
 
+    void rotate()
+    {
+        QTemporaryDir dir;
+        TokenStore store(dir.filePath("tokens.json"));
+        const auto [token, oldSecret] = store.create("relay", Scope::Read | Scope::Launch, ConfirmPolicy::AskAllWrites);
+        const auto newSecret = store.rotate(token.id);
+        QVERIFY(newSecret.has_value());
+        QVERIFY(*newSecret != oldSecret);
+        QVERIFY(!store.verify(oldSecret).has_value());
+        const auto match = store.verify(*newSecret);
+        QVERIFY(match.has_value());
+        QCOMPARE(match->id, token.id);
+        QVERIFY(match->scopes == Scopes(Scope::Read | Scope::Launch));
+        QVERIFY(match->policy == ConfirmPolicy::AskAllWrites);
+        QCOMPARE(store.tokens().size(), 1);
+        QVERIFY(!store.rotate("missing").has_value());
+    }
+
     void scopeNamesRoundTrip()
     {
         for (auto scope : allScopes()) {

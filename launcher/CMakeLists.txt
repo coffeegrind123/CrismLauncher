@@ -595,6 +595,8 @@ set(MCP_SOURCES
     mcp/McpCommon.h
     mcp/McpCreateTool.cpp
     mcp/McpCreateTool.h
+    mcp/McpExportOps.cpp
+    mcp/McpExportOps.h
     mcp/McpFileOps.cpp
     mcp/McpFileOps.h
     mcp/McpGameTools.cpp
@@ -603,6 +605,8 @@ set(MCP_SOURCES
     mcp/McpHttp.h
     mcp/McpInstanceTools.cpp
     mcp/McpInstanceTools.h
+    mcp/McpJavaOps.cpp
+    mcp/McpJavaOps.h
     mcp/McpJobs.cpp
     mcp/McpJobs.h
     mcp/McpLauncherTools.cpp
@@ -615,14 +619,22 @@ set(MCP_SOURCES
     mcp/McpProtocol.h
     mcp/McpSchema.cpp
     mcp/McpSchema.h
+    mcp/McpResources.cpp
+    mcp/McpResources.h
     mcp/McpService.cpp
     mcp/McpService.h
     mcp/McpSettingsTool.cpp
+    mcp/McpStdioRelay.cpp
+    mcp/McpStdioRelay.h
     mcp/McpSettingsTool.h
     mcp/McpTokens.cpp
     mcp/McpTokens.h
     mcp/McpTool.cpp
     mcp/McpTool.h
+    mcp/McpUpdateOps.cpp
+    mcp/McpUpdateOps.h
+    mcp/McpWorldOps.cpp
+    mcp/McpWorldOps.h
     mcp/McpWriteOps.cpp
     mcp/McpWriteOps.h
 )

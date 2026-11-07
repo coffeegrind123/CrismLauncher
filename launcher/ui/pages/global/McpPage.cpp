@@ -9,6 +9,8 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QCoreApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -150,6 +152,12 @@ McpPage::McpPage(QWidget* parent) : QWidget(parent)
     m_status = new QLabel(this);
     m_status->setTextInteractionFlags(Qt::TextSelectableByMouse);
     serverForm->addRow(m_status);
+    m_stdio = new QCheckBox(this);
+    m_copyStdioConfig = new QPushButton(QIcon::fromTheme("copy"), QString(), this);
+    auto* stdioRow = new QHBoxLayout();
+    stdioRow->addWidget(m_stdio, 1);
+    stdioRow->addWidget(m_copyStdioConfig);
+    serverForm->addRow(stdioRow);
     layout->addLayout(serverForm);
 
     m_tokensLabel = new QLabel(this);
@@ -178,6 +186,12 @@ McpPage::McpPage(QWidget* parent) : QWidget(parent)
     m_activity->setColumnCount(5);
     layout->addWidget(m_activity, 1);
 
+    connect(m_copyStdioConfig, &QPushButton::clicked, this, [] {
+        // Claude Desktop (and other clients that start a command) run the launcher binary itself as a relay
+        const QJsonObject server{ { "command", QCoreApplication::applicationFilePath() }, { "args", QJsonArray{ "--mcp-stdio" } } };
+        GuiUtil::setClipboardText(QString::fromUtf8(
+            QJsonDocument(QJsonObject{ { "mcpServers", QJsonObject{ { SERVER_KEY, server } } } }).toJson(QJsonDocument::Indented)));
+    });
     connect(m_create, &QPushButton::clicked, this, &McpPage::createToken);
     connect(m_edit, &QPushButton::clicked, this, &McpPage::editToken);
     connect(m_revoke, &QPushButton::clicked, this, &McpPage::revokeToken);
@@ -209,6 +223,9 @@ void McpPage::retranslate()
            "launching. The endpoint only listens on this computer (127.0.0.1), and every agent needs a token created here."));
     m_enabled->setText(tr("Enable the MCP endpoint"));
     m_portLabel->setText(tr("Port:"));
+    m_stdio->setText(tr("Allow clients that start the launcher as a command (Claude Desktop): they use the \"%1\" token")
+                         .arg(QString("Local stdio clients")));
+    m_copyStdioConfig->setText(tr("Copy Claude Desktop config"));
     m_tokensLabel->setText(tr("Tokens"));
     m_tokenList->setHeaderLabels({ tr("Name"), tr("Scopes"), tr("Confirmation"), tr("Created"), tr("Last used") });
     m_create->setText(tr("Create token..."));
@@ -223,6 +240,7 @@ void McpPage::loadSettings()
 {
     auto* settings = APPLICATION->settings();
     m_enabled->setChecked(settings->get("McpEnabled").toBool());
+    m_stdio->setChecked(settings->get("McpStdioEnabled").toBool());
     const int port = settings->get("McpPort").toInt();
     m_port->setValue(port < MIN_PORT ? MIN_PORT - 1 : port);
 }
@@ -231,12 +249,15 @@ bool McpPage::apply()
 {
     auto* settings = APPLICATION->settings();
     settings->set("McpEnabled", m_enabled->isChecked());
+    settings->set("McpStdioEnabled", m_stdio->isChecked());
     settings->set("McpPort", m_port->value() < MIN_PORT ? 0 : m_port->value());
     if (auto* service = APPLICATION->mcp()) {
         service->applySettings();
         // An automatic port was just chosen; show it so it can be copied into client configs
         const int port = settings->get("McpPort").toInt();
         m_port->setValue(port < MIN_PORT ? MIN_PORT - 1 : port);
+        // Enabling stdio clients creates their token
+        refreshTokens();
     }
     return true;
 }

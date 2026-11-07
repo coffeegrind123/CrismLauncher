@@ -218,6 +218,19 @@ bool TokenStore::update(const QString& id, const QString& name, Scopes scopes, C
     return false;
 }
 
+std::optional<QString> TokenStore::rotate(const QString& id)
+{
+    for (auto& token : m_tokens) {
+        if (token.id == id) {
+            const auto [fresh, secret] = create(token.name, token.scopes, token.policy);
+            m_tokens.removeLast();
+            token.hash = fresh.hash;
+            return secret;
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<TokenInfo> TokenStore::find(const QString& id) const
 {
     for (const auto& token : m_tokens) {

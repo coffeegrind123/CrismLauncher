@@ -110,6 +110,7 @@
 
 #include "InstanceList.h"
 #include "mcp/McpService.h"
+#include "mcp/McpStdioRelay.h"
 #include "MTPixmapCache.h"
 
 #include <minecraft/auth/AccountList.h>
@@ -331,7 +332,8 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
           { "alive", "Write a small '" + g_liveCheckFile + "' file after the launcher starts" },
           { "show-window", "Show the main launcher window (useful in combination with --launch)" },
           { { "I", "import" }, "Import instance or resource from specified local path or URL", "url" },
-          { "show", "Opens the window for the specified instance (by instance ID)", "show" } });
+          { "show", "Opens the window for the specified instance (by instance ID)", "show" },
+          { "mcp-stdio", "Relay MCP over stdin/stdout to the running launcher, for AI clients that start a command" } });
     // Has to be positional for some OS to handle that properly
     parser.addPositionalArgument("URL", "Import the resource(s) at the given URL(s) (same as -I / --import)", "[URL...]");
 
@@ -450,6 +452,17 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         return;
     }
     m_dataPath = dataPath;
+
+    // Before the single-instance check and logging: the relay is a separate small process, and its stdout carries only
+    // protocol messages. The event loop that main() starts next runs it.
+    if (parser.isSet("mcp-stdio")) {
+        QStringList launcherArguments;
+        if (!dirParam.isEmpty()) {
+            launcherArguments << "--dir" << dataPath;
+        }
+        (new McpStdioRelay(m_dataPath, launcherArguments, this))->start();
+        return;
+    }
 
     /*
      * Establish the mechanism for communication with an already running PrismLauncher that uses the same data path.

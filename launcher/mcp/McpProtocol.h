@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 
+#include "mcp/McpResources.h"
 #include "mcp/McpTokens.h"
 #include "mcp/McpTool.h"
 
@@ -84,6 +85,10 @@ class Protocol {
    public:
     Protocol(const ToolRegistry* tools, ServerInfo info);
 
+    // Optional: without them the resources / prompts capabilities are not advertised
+    void setResources(const ResourceCatalog* resources) { m_resources = resources; }
+    void setPrompts(const PromptCatalog* prompts) { m_prompts = prompts; }
+
     void handle(const Incoming& incoming, const ExchangePtr& exchange);
 
     // Every tools/call, after it finished; feeds the activity log
@@ -115,7 +120,12 @@ class Protocol {
     // HTTP status for a JSON-RPC error: modern requests use the status the spec assigns, legacy ones 200
     static int errorStatus(const Request& request, int code);
 
+    void readResource(const Request& request, const Incoming& incoming, const ExchangePtr& exchange);
+    void getPrompt(const Request& request, const Incoming& incoming, const ExchangePtr& exchange);
+
     const ToolRegistry* m_tools;
+    const ResourceCatalog* m_resources = nullptr;
+    const PromptCatalog* m_prompts = nullptr;
     ServerInfo m_info;
 };
 

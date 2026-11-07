@@ -243,6 +243,41 @@ void Protocol::dispatch(const Request& request, const Incoming& incoming, const 
         callTool(request, incoming, exchange);
         return;
     }
+    if (m_resources && method == "resources/list") {
+        QJsonObject body{ { "resources", m_resources->listJson() } };
+        if (request.modern) {
+            body["ttlMs"] = LIST_TTL_MS;
+            body["cacheScope"] = "private";
+        }
+        exchange->finish(200, result(request, body));
+        return;
+    }
+    if (m_resources && method == "resources/templates/list") {
+        QJsonObject body{ { "resourceTemplates", m_resources->templatesJson() } };
+        if (request.modern) {
+            body["ttlMs"] = LIST_TTL_MS;
+            body["cacheScope"] = "private";
+        }
+        exchange->finish(200, result(request, body));
+        return;
+    }
+    if (m_resources && method == "resources/read") {
+        readResource(request, incoming, exchange);
+        return;
+    }
+    if (m_prompts && method == "prompts/list") {
+        QJsonObject body{ { "prompts", m_prompts->listJson() } };
+        if (request.modern) {
+            body["ttlMs"] = LIST_TTL_MS;
+            body["cacheScope"] = "private";
+        }
+        exchange->finish(200, result(request, body));
+        return;
+    }
+    if (m_prompts && method == "prompts/get") {
+        getPrompt(request, incoming, exchange);
+        return;
+    }
 
     exchange->reject(errorStatus(request, ERROR_METHOD_NOT_FOUND),
                      errorResponse(request.id, ERROR_METHOD_NOT_FOUND, QString("Method not found: %1").arg(method)));
@@ -349,6 +384,46 @@ void Protocol::callTool(const Request& request, const Incoming& incoming, const 
     invokeTool(*tool, context, arguments, reply);
 }
 
+void Protocol::readResource(const Request& request, const Incoming& incoming, const ExchangePtr& exchange)
+{
+    if (!incoming.token.scopes.testFlag(Scope::Read)) {
+        exchange->reject(errorStatus(request, ERROR_INVALID_REQUEST),
+                         errorResponse(request.id, ERROR_INVALID_REQUEST, "Reading resources needs the 'read' scope"));
+        return;
+    }
+    const auto uri = request.params.value("uri").toString();
+    // The reader may answer later; `this` outlives every exchange (the service owns both)
+    m_resources->read(uri, [this, request, exchange](Result<ResourceContent> content) {
+        if (!content) {
+            // 2026-07-28 reports a missing resource as invalid params (-32602), no longer -32002
+            exchange->reject(errorStatus(request, ERROR_INVALID_PARAMS), errorResponse(request.id, ERROR_INVALID_PARAMS, content.error(),
+                                                                                       QJsonObject{ { "uri", request.params.value("uri") } }));
+            return;
+        }
+        QJsonObject body{ { "contents", QJsonArray{ QJsonObject{ { "uri", content->uri }, { "mimeType", content->mimeType }, { "text", content->text } } } } };
+        if (request.modern) {
+            body["ttlMs"] = 0;
+            body["cacheScope"] = "private";
+        }
+        exchange->finish(200, result(request, body));
+    });
+}
+
+void Protocol::getPrompt(const Request& request, const Incoming& incoming, const ExchangePtr& exchange)
+{
+    if (!incoming.token.scopes.testFlag(Scope::Read)) {
+        exchange->reject(errorStatus(request, ERROR_INVALID_REQUEST),
+                         errorResponse(request.id, ERROR_INVALID_REQUEST, "Prompts need the 'read' scope"));
+        return;
+    }
+    auto prompt = m_prompts->get(request.params.value("name").toString(), request.params.value("arguments").toObject());
+    if (!prompt) {
+        exchange->reject(errorStatus(request, ERROR_INVALID_PARAMS), errorResponse(request.id, ERROR_INVALID_PARAMS, prompt.error()));
+        return;
+    }
+    exchange->finish(200, result(request, *prompt));
+}
+
 QJsonObject Protocol::result(const Request& request, QJsonObject body) const
 {
     if (request.modern) {
@@ -362,7 +437,14 @@ QJsonObject Protocol::result(const Request& request, QJsonObject body) const
 
 QJsonObject Protocol::capabilities() const
 {
-    return QJsonObject{ { "tools", QJsonObject{ { "listChanged", false } } } };
+    QJsonObject out{ { "tools", QJsonObject{ { "listChanged", false } } } };
+    if (m_resources) {
+        out["resources"] = QJsonObject{ { "listChanged", false }, { "subscribe", false } };
+    }
+    if (m_prompts) {
+        out["prompts"] = QJsonObject{ { "listChanged", false } };
+    }
+    return out;
 }
 
 QJsonObject Protocol::discoverResult(const Request& request) const

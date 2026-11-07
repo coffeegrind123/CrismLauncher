@@ -52,6 +52,9 @@ class McpService : public QObject {
     QString lastError() const { return m_lastError; }
 
     Mcp::TokenStore& tokens() { return m_tokens; }
+
+    // The token the --mcp-stdio relay uses; its secret lives in <data>/mcp/stdio.json while stdio clients are enabled
+    QString stdioTokenId() const;
     Result<> saveTokens();
 
     const QList<Mcp::CallRecord>& recentCalls() const { return m_recentCalls; }
@@ -79,6 +82,7 @@ class McpService : public QObject {
    private:
     void handleHttp(const Mcp::Http::Request& request, const Mcp::Http::ResponderPtr& responder);
     void recordCall(const Mcp::CallRecord& record);
+    void updateStdioConfig();
     bool allowRequest(const QString& tokenId);
     QString instructions() const;
 
@@ -89,6 +93,8 @@ class McpService : public QObject {
     // The op catalog behind search_ops / call / batch
     Mcp::ToolRegistry m_ops;
     Mcp::JobRegistry m_jobs;
+    Mcp::ResourceCatalog m_resources;
+    Mcp::PromptCatalog m_prompts;
     std::unique_ptr<Mcp::Protocol> m_protocol;
     Mcp::Http::Server* m_server = nullptr;
     QString m_lastError;

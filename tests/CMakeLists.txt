@@ -39,6 +39,8 @@ set(TEST_SOURCES
     McpOps_test.cpp
     McpJobs_test.cpp
     McpFileOps_test.cpp
+    McpResources_test.cpp
+    McpStdioRelay_test.cpp
 )
 
 # NOTE(@getchoo): Very funny way of aliasing the Qt generated `main` test functions to respective filenames

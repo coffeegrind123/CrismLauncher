@@ -11,17 +11,26 @@
 
 #include "BuildConfig.h"
 #include "FileSystem.h"
+#include "mcp/McpCreateTool.h"
+#include "mcp/McpExportOps.h"
 #include "mcp/McpFileOps.h"
 #include "mcp/McpGameTools.h"
 #include "mcp/McpInstanceTools.h"
+#include "mcp/McpJavaOps.h"
 #include "mcp/McpLauncherTools.h"
 #include "mcp/McpOps.h"
+#include "mcp/McpUpdateOps.h"
+#include "mcp/McpWorldOps.h"
 #include "mcp/McpWriteOps.h"
 #include "settings/SettingsObject.h"
 
 namespace {
 constexpr auto SETTING_ENABLED = "McpEnabled";
 constexpr auto SETTING_PORT = "McpPort";
+constexpr auto SETTING_STDIO = "McpStdioEnabled";
+constexpr auto SETTING_STDIO_TOKEN = "McpStdioTokenId";
+constexpr auto STDIO_FILE = "mcp/stdio.json";
+constexpr auto STDIO_TOKEN_NAME = "Local stdio clients";
 constexpr auto TOKENS_FILE = "mcp/tokens.json";
 constexpr auto AUDIT_LOG_FILE = "logs/mcp.log";
 constexpr auto AUTH_REALM = "Bearer realm=\"Crism Launcher MCP\"";
@@ -140,6 +149,11 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
     Mcp::registerWriteOps(m_ops);
     Mcp::registerGameOps(m_ops);
     Mcp::registerFileOps(m_ops);
+    Mcp::registerWorldOps(m_ops);
+    Mcp::registerUpdateOps(m_ops);
+    Mcp::registerExportOps(m_ops);
+    Mcp::registerPackOps(m_ops);
+    Mcp::registerJavaOps(m_ops);
     Mcp::registerOpTools(m_tools, &m_ops);
 
     Mcp::ServerInfo info;
@@ -148,6 +162,10 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
     info.version = BuildConfig.printableVersionString();
     info.instructions = instructions();
     m_protocol = std::make_unique<Mcp::Protocol>(&m_tools, info);
+    Mcp::registerLauncherResources(m_resources, &m_tools, &m_ops);
+    Mcp::registerLauncherPrompts(m_prompts);
+    m_protocol->setResources(&m_resources);
+    m_protocol->setPrompts(&m_prompts);
     m_protocol->onToolCall = [this](const Mcp::CallRecord& record) {
         m_activeCalls = std::max(0, m_activeCalls - 1);
         recordCall(record);
@@ -183,13 +201,20 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
     applySettings();
 }
 
-McpService::~McpService() = default;
+McpService::~McpService()
+{
+    // The relay must not find a port that no longer answers
+    QFile::remove(FS::PathCombine(m_dataRoot, STDIO_FILE));
+}
 
 void McpService::registerSettings(SettingsObject* settings)
 {
     settings->registerSetting(SETTING_ENABLED, false);
     // 0 means "pick a free port on first start"; the chosen port is then saved so client configs stay valid
     settings->registerSetting(SETTING_PORT, 0);
+    // Lets `<launcher> --mcp-stdio` (Claude Desktop and other stdio-only clients) use the endpoint
+    settings->registerSetting(SETTING_STDIO, false);
+    settings->registerSetting(SETTING_STDIO_TOKEN, "");
 }
 
 void McpService::applySettings()
@@ -203,11 +228,13 @@ void McpService::applySettings()
             qInfo() << "MCP: endpoint stopped";
         }
         m_lastError.clear();
+        updateStdioConfig();
         emit stateChanged();
         return;
     }
 
     if (m_server->isListening() && (configuredPort == 0 || static_cast<int>(m_server->port()) == configuredPort)) {
+        updateStdioConfig();
         return;
     }
 
@@ -224,7 +251,56 @@ void McpService::applySettings()
         m_settings->set(SETTING_PORT, m_server->port());
     }
     qInfo() << "MCP: endpoint listening on" << endpointUrl();
+    updateStdioConfig();
     emit stateChanged();
+}
+
+QString McpService::stdioTokenId() const
+{
+    return m_settings->get(SETTING_STDIO_TOKEN).toString();
+}
+
+void McpService::updateStdioConfig()
+{
+    const auto path = FS::PathCombine(m_dataRoot, STDIO_FILE);
+    if (!m_server->isListening() || !m_settings->get(SETTING_STDIO).toBool()) {
+        QFile::remove(path);
+        return;
+    }
+
+    auto id = stdioTokenId();
+
+    // Keep a file that still matches: a running relay holds its secret, and rotating it would cut that client off
+    if (QFile existing(path); existing.open(QIODevice::ReadOnly)) {
+        const auto current = QJsonDocument::fromJson(existing.readAll()).object();
+        const auto token = m_tokens.find(id);
+        if (token && current.value("port").toInt() == static_cast<int>(m_server->port()) &&
+            Mcp::TokenStore::hashSecret(current.value("token").toString()) == token->hash) {
+            return;
+        }
+    }
+
+    // Otherwise a fresh secret: the store keeps only hashes, so a lost one can't be written out again
+    std::optional<QString> secret;
+    if (!id.isEmpty() && m_tokens.find(id)) {
+        secret = m_tokens.rotate(id);
+    } else {
+        auto [token, created] = m_tokens.create(STDIO_TOKEN_NAME, Mcp::Scope::Read | Mcp::Scope::Instances | Mcp::Scope::Content | Mcp::Scope::Launch,
+                                                Mcp::ConfirmPolicy::AskDestructive);
+        id = token.id;
+        secret = created;
+        m_settings->set(SETTING_STDIO_TOKEN, id);
+    }
+    if (auto res = m_tokens.save(); !res) {
+        qWarning() << "MCP: could not save the stdio token:" << res.error();
+        return;
+    }
+    const QJsonObject config{ { "port", static_cast<int>(m_server->port()) }, { "token", *secret } };
+    if (auto res = FS::write(path, QJsonDocument(config).toJson()); !res) {
+        qWarning() << "MCP: could not write" << path << ":" << res.error();
+        return;
+    }
+    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 }
 
 bool McpService::isListening() const
