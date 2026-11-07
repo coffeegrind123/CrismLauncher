@@ -14,9 +14,7 @@
 #include <tag_string.h>
 
 // A Minecraft servers.dat (the multiplayer server list), shared by the Servers page and the MCP server ops.
-// Moved here unchanged from ui/pages/instance/ServersPage.cpp.
-namespace ServersDat {
-
+// Moved here unchanged from ui/pages/instance/ServersPage.cpp. Server stays global: ServersPage.h forward-declares it.
 struct Server {
     // Types
     enum class AcceptsTextures : int { ASK = 0, ALWAYS = 1, NEVER = 2 };
@@ -74,6 +72,8 @@ struct Server {
     // Data - temporary
     std::optional<int> m_currentPlayers;  // nullopt if not calculated/calculating
 };
+
+namespace ServersDat {
 
 // The root compound of a servers.dat, or nullptr when it is missing or unreadable
 std::unique_ptr<nbt::tag_compound> parseServersDat(const QString& filename);

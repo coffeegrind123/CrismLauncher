@@ -58,7 +58,6 @@
 
 static const int COLUMN_COUNT = 3;  // 3 , TBD: latency and other nice things.
 
-using ServersDat::Server;
 using ServersDat::parseServersDat;
 using ServersDat::serializeServerDat;
 

@@ -155,20 +155,20 @@ QString serversPath(MinecraftInstance* instance)
     return FS::PathCombine(instance->gameRoot(), SERVERS_FILE);
 }
 
-QList<ServersDat::Server> readServers(MinecraftInstance* instance)
+QList<::Server> readServers(MinecraftInstance* instance)
 {
-    QList<ServersDat::Server> out;
+    QList<::Server> out;
     auto root = ServersDat::parseServersDat(serversPath(instance));
     if (!root || !root->has_key("servers", nbt::tag_type::List)) {
         return out;
     }
     for (auto& entry : root->at("servers").as<nbt::tag_list>()) {
-        out.append(ServersDat::Server(entry.as<nbt::tag_compound>()));
+        out.append(::Server(entry.as<nbt::tag_compound>()));
     }
     return out;
 }
 
-bool writeServers(MinecraftInstance* instance, QList<ServersDat::Server>& servers)
+bool writeServers(MinecraftInstance* instance, QList<::Server>& servers)
 {
     nbt::tag_compound out;
     nbt::tag_list list;
@@ -181,31 +181,31 @@ bool writeServers(MinecraftInstance* instance, QList<ServersDat::Server>& server
     return ServersDat::serializeServerDat(serversPath(instance), &out);
 }
 
-QString texturesName(ServersDat::Server::AcceptsTextures value)
+QString texturesName(::Server::AcceptsTextures value)
 {
     switch (value) {
-        case ServersDat::Server::AcceptsTextures::ALWAYS:
+        case ::Server::AcceptsTextures::ALWAYS:
             return "always";
-        case ServersDat::Server::AcceptsTextures::NEVER:
+        case ::Server::AcceptsTextures::NEVER:
             return "never";
-        case ServersDat::Server::AcceptsTextures::ASK:
+        case ::Server::AcceptsTextures::ASK:
             break;
     }
     return "ask";
 }
 
-ServersDat::Server::AcceptsTextures texturesFrom(const QString& name)
+Server::AcceptsTextures texturesFrom(const QString& name)
 {
     if (name == "always") {
-        return ServersDat::Server::AcceptsTextures::ALWAYS;
+        return ::Server::AcceptsTextures::ALWAYS;
     }
     if (name == "never") {
-        return ServersDat::Server::AcceptsTextures::NEVER;
+        return ::Server::AcceptsTextures::NEVER;
     }
-    return ServersDat::Server::AcceptsTextures::ASK;
+    return ::Server::AcceptsTextures::ASK;
 }
 
-QJsonArray serversJson(const QList<ServersDat::Server>& servers)
+QJsonArray serversJson(const QList<::Server>& servers)
 {
     QJsonArray out;
     for (int i = 0; i < servers.size(); ++i) {
@@ -240,7 +240,7 @@ void serversChange(const QJsonObject& arguments, const ToolReply& reply, const Q
     }
 
     if (action == "add") {
-        ServersDat::Server server(arguments.value("name").toString("Minecraft Server"), arguments.value("address").toString());
+        ::Server server(arguments.value("name").toString("Minecraft Server"), arguments.value("address").toString());
         server.m_acceptsTextures = texturesFrom(arguments.value("resourcePacks").toString("ask"));
         servers.append(server);
     } else if (action == "edit") {
@@ -290,7 +290,7 @@ void registerWorldOps(ToolRegistry& ops)
     using namespace Schema;
     const auto instanceArg = string("Instance id");
     const auto worldArg = string("World folder name (worlds.list)");
-    const auto texturesArg = string("Server resource packs", { "ask", "always", "never" });
+    const auto texturesArg = string("::Server resource packs", { "ask", "always", "never" });
 
     ops.add(worldOp("worlds.rename", Scope::Content, Effect::Write, "Changes a world's display name (its folder stays). Refused while the game runs.",
                     object({ { "instance", instanceArg }, { "world", worldArg }, { "name", string("New name") } }, { "instance", "world", "name" }),
@@ -333,7 +333,7 @@ void registerWorldOps(ToolRegistry& ops)
 
     ops.add(worldOp("servers.edit", Scope::Content, Effect::Write, "Changes a saved server's name, address or resource-pack setting.",
                     object({ { "instance", instanceArg },
-                             { "index", integer("Server index (servers.list)", 0, std::nullopt) },
+                             { "index", integer("::Server index (servers.list)", 0, std::nullopt) },
                              { "name", string("Display name") },
                              { "address", string("host[:port]") },
                              { "resourcePacks", texturesArg } },
@@ -342,7 +342,7 @@ void registerWorldOps(ToolRegistry& ops)
                     [](const CallContext&, const QJsonObject& a, const ToolReply& r) { serversChange(a, r, "edit"); }));
 
     ops.add(worldOp("servers.remove", Scope::Content, Effect::Destructive, "Removes a server from an instance's multiplayer list.",
-                    object({ { "instance", instanceArg }, { "index", integer("Server index (servers.list)", 0, std::nullopt) } }, { "instance", "index" }),
+                    object({ { "instance", instanceArg }, { "index", integer("::Server index (servers.list)", 0, std::nullopt) } }, { "instance", "index" }),
                     [](const QJsonObject& a) { return QString("Remove server #%1 of '%2'").arg(a.value("index").toInt()).arg(instanceLabel(a)); },
                     [](const CallContext&, const QJsonObject& a, const ToolReply& r) { serversChange(a, r, "remove"); }));
 }
