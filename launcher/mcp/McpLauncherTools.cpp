@@ -9,6 +9,7 @@
 #include "BuildConfig.h"
 #include "InstanceList.h"
 #include "mcp/McpCreateTool.h"
+#include "mcp/McpGameTools.h"
 #include "mcp/McpInstanceTools.h"
 #include "mcp/McpPlatformTools.h"
 #include "mcp/McpProtocol.h"
@@ -256,6 +257,7 @@ void registerLauncherTools(ToolRegistry& registry)
     registerPlatformTools(registry);
     registerSettingsTool(registry);
     registerCreateTool(registry);
+    registerGameTools(registry);
 }
 
 }  // namespace Mcp
