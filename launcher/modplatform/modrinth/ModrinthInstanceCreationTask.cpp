@@ -74,7 +74,8 @@ void ModrinthCreationTask::executeTask()
     auto versionStr = !versionName.isEmpty() ? tr(" (version %1)").arg(versionName) : "";
 
     if (shouldConfirmUpdate()) {
-        auto shouldUpdate = askIfShouldUpdate(m_parent, versionStr);
+        // Unattended installs always create a separate instance; updating one in place needs a person to decide
+        auto shouldUpdate = unattended() ? ShouldUpdate::SkipUpdating : askIfShouldUpdate(m_parent, versionStr);
         if (shouldUpdate == ShouldUpdate::SkipUpdating) {
             createInstance();
             return;
@@ -410,7 +411,16 @@ bool ModrinthCreationTask::parseManifest(const QString& indexPath, std::vector<F
         return false;
     }
     if (!optionalFiles.empty()) {
-        if (showOptionalDialog) {
+        if (showOptionalDialog && unattended()) {
+            for (auto file : optionalFiles) {
+                if (unattended()->optionalFiles.contains(file.path)) {
+                    file.required = true;
+                } else {
+                    file.path += ".disabled";
+                }
+                files.push_back(file);
+            }
+        } else if (showOptionalDialog) {
             QStringList oFiles;
             for (const auto& file : optionalFiles) {
                 oFiles.push_back(file.path);
@@ -488,6 +498,13 @@ bool ModrinthCreationTask::promptForUntrustedMods()
 
     if (untrustedMods.empty()) {
         return true;
+    }
+
+    if (unattended()) {
+        if (!unattended()->acceptUntrustedFiles) {
+            qWarning() << "Unattended install refused files that did not come from a mod platform:" << untrustedMods;
+        }
+        return unattended()->acceptUntrustedFiles;
     }
 
     UntrustedModsDialog dialog{ untrustedMods, m_parent };

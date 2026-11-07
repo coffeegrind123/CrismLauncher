@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include <QDir>
 #include <cstdint>
 #include "settings/SettingsObject.h"
@@ -49,6 +51,15 @@ class InstanceTask : public Task {
     void setName(const QString& name) { m_modifiedName = name; }
     void setOriginalName(const QString& name, const QString& version);
 
+    // Answers for the questions a pack install can ask, set when nobody is at the keyboard (an AI agent via MCP).
+    // With these set the task never opens a dialog: it uses the answer, or fails with the reason.
+    struct UnattendedChoices {
+        QStringList optionalFiles;          // optional pack files to enable, by path inside the pack
+        bool acceptUntrustedFiles = false;  // keep jars a non-platform pack ships itself
+    };
+    void setUnattended(const UnattendedChoices& choices) { m_unattended = choices; }
+    const std::optional<UnattendedChoices>& unattended() const { return m_unattended; }
+
    protected:
     void setOverride(bool override, const QString& instanceIdToOverride = {});
 
@@ -80,4 +91,6 @@ class InstanceTask : public Task {
     ShouldDeleteSaves m_shouldDeleteSaves{};
 
     Task::Ptr m_gameFilesTask;
+
+    std::optional<UnattendedChoices> m_unattended;
 };

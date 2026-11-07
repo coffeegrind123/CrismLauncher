@@ -127,7 +127,8 @@ void FlameCreationTask::executeTask()
     auto versionStr = !versionId.isEmpty() ? tr(" (version %1)").arg(versionId) : "";
 
     if (shouldConfirmUpdate()) {
-        auto shouldUpdate = askIfShouldUpdate(m_parent, versionStr);
+        // Unattended installs always create a separate instance; updating one in place needs a person to decide
+        auto shouldUpdate = unattended() ? ShouldUpdate::SkipUpdating : askIfShouldUpdate(m_parent, versionStr);
         if (shouldUpdate == ShouldUpdate::SkipUpdating) {
             createInstance();
             return;
@@ -370,6 +371,13 @@ bool FlameCreationTask::promptForUntrustedMods()
         return true;
     }
 
+    if (unattended()) {
+        if (!unattended()->acceptUntrustedFiles) {
+            qWarning() << "Unattended install refused files that did not come from a mod platform:" << untrustedMods;
+        }
+        return unattended()->acceptUntrustedFiles;
+    }
+
     UntrustedModsDialog dialog{ untrustedMods, m_parent };
     return dialog.exec() == QDialog::Accepted;
 }
@@ -551,7 +559,13 @@ void FlameCreationTask::idResolverSucceeded()
         }
     }
 
-    if (!optionalFiles.empty()) {
+    if (!optionalFiles.empty() && unattended()) {
+        for (const auto& file : optionalFiles) {
+            if (unattended()->optionalFiles.contains(file)) {
+                m_selectedOptionalMods << file;
+            }
+        }
+    } else if (!optionalFiles.empty()) {
         OptionalModDialog optionalModDialog(m_parent, optionalFiles);
         if (optionalModDialog.exec() == QDialog::Rejected) {
             emitAborted();
@@ -588,6 +602,14 @@ void FlameCreationTask::idResolverSucceeded()
 
             anyBlocked = true;
         }
+    }
+    if (anyBlocked && unattended()) {
+        QStringList names;
+        for (const auto& mod : blockedMods) {
+            names << mod.name;
+        }
+        emitFailed(tr("These files can only be downloaded by hand from CurseForge: %1").arg(names.join(", ")));
+        return;
     }
     if (anyBlocked) {
         qWarning() << "Blocked mods found, displaying mod list";

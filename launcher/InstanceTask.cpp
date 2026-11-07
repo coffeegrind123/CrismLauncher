@@ -157,7 +157,10 @@ void InstanceTask::downloadFiles(MinecraftInstance* inst)
         if (!isRunning()) {
             return;
         }
-        if (!task->wasSuccessful()) {
+        if (!task->wasSuccessful() && unattended()) {
+            // The instance exists either way; the files download again at launch
+            qWarning() << "Could not download game files:" << task->failReason();
+        } else if (!task->wasSuccessful()) {
             CustomMessageBox::selectable(QApplication::activeWindow(), tr("Error"),
                                          tr("Could not download game files: %1").arg(task->failReason()), QMessageBox::Warning)
                 ->show();
