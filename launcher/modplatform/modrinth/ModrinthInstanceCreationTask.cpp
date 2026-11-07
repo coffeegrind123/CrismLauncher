@@ -145,14 +145,20 @@ void ModrinthCreationTask::executeTask()
         }
     } else {
         // We don't have an old index file, so we may duplicate stuff!
-        auto* dialog = CustomMessageBox::selectable(m_parent, tr("No index file."),
-                                                    tr("We couldn't find a suitable index file for the older version. This may cause some "
-                                                       "of the files to be duplicated. Do you want to continue?"),
-                                                    QMessageBox::Warning, QMessageBox::Ok | QMessageBox::Cancel);
-
-        if (dialog->exec() == QDialog::DialogCode::Rejected) {
-            emitAborted();
+        if (unattended() && !unattended()->allowDuplicateFiles) {
+            emitFailed(tr("We couldn't find a suitable index file for the older version, so updating may duplicate files."));
             return;
+        }
+        if (!unattended()) {
+            auto* dialog = CustomMessageBox::selectable(m_parent, tr("No index file."),
+                                                        tr("We couldn't find a suitable index file for the older version. This may cause some "
+                                                           "of the files to be duplicated. Do you want to continue?"),
+                                                        QMessageBox::Warning, QMessageBox::Ok | QMessageBox::Cancel);
+
+            if (dialog->exec() == QDialog::DialogCode::Rejected) {
+                emitAborted();
+                return;
+            }
         }
     }
 
@@ -555,7 +561,7 @@ void ModrinthCreationTask::finishInstall()
         // is preserved, but if we're using the original one, we update the version string.
         // NOTE: This needs to come before the setManagedPack call!
         if (inst->name().contains(inst->getManagedPackVersionName()) && inst->name() != name()) {
-            if (askForChangingInstanceName(m_parent, inst->name(), name()) == InstanceNameChange::ShouldChange) {
+            if (unattended() || askForChangingInstanceName(m_parent, inst->name(), name()) == InstanceNameChange::ShouldChange) {
                 inst->setName(name());
             }
         }

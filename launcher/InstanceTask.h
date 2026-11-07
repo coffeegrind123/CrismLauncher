@@ -56,6 +56,7 @@ class InstanceTask : public Task {
     struct UnattendedChoices {
         QStringList optionalFiles;          // optional pack files to enable, by path inside the pack
         bool acceptUntrustedFiles = false;  // keep jars a non-platform pack ships itself
+        bool allowDuplicateFiles = false;   // update a pack whose old file index is missing (old files may stay behind)
     };
     void setUnattended(const UnattendedChoices& choices) { m_unattended = choices; }
     const std::optional<UnattendedChoices>& unattended() const { return m_unattended; }

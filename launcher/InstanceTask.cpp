@@ -116,7 +116,8 @@ void InstanceTask::scheduleToDelete(QWidget* parent, const QDir& dir, const QStr
     }
     if (path.startsWith("saves/")) {
         if (m_shouldDeleteSaves == ShouldDeleteSaves::NotAsked) {
-            m_shouldDeleteSaves = askIfShouldDeleteSaves(parent);
+            // Unattended updates never delete worlds: only a person decides that
+            m_shouldDeleteSaves = unattended() ? ShouldDeleteSaves::No : askIfShouldDeleteSaves(parent);
         }
         if (m_shouldDeleteSaves == ShouldDeleteSaves::No) {
             return;
