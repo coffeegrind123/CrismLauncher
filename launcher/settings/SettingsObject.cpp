@@ -217,6 +217,18 @@ bool SettingsObject::contains(const QString& id)
     return m_settings.contains(id);
 }
 
+QStringList SettingsObject::settingIds() const
+{
+    QStringList ids;
+    for (const auto& setting : m_settings) {
+        if (setting && !ids.contains(setting->id())) {
+            ids.append(setting->id());
+        }
+    }
+    ids.sort();
+    return ids;
+}
+
 bool SettingsObject::reload()
 {
     for (auto setting : m_settings.values()) {

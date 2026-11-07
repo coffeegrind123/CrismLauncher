@@ -165,6 +165,11 @@ class SettingsObject : public QObject {
     bool contains(const QString& id);
 
     /*!
+     * \brief The primary ID of every registered setting, sorted, each once (synonyms are not listed).
+     */
+    QStringList settingIds() const;
+
+    /*!
      * \brief Reloads the settings and emit signals for changed settings
      * \return True if reloading was successful
      */
