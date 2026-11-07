@@ -8,8 +8,11 @@
 #include "Application.h"
 #include "BuildConfig.h"
 #include "InstanceList.h"
+#include "mcp/McpInstanceTools.h"
+#include "mcp/McpPlatformTools.h"
 #include "mcp/McpProtocol.h"
 #include "mcp/McpSchema.h"
+#include "mcp/McpSettingsTool.h"
 #include "mcp/McpTool.h"
 #include "minecraft/Component.h"
 #include "minecraft/MinecraftInstance.h"
@@ -247,6 +250,10 @@ void registerLauncherTools(ToolRegistry& registry)
         tool.handler = listInstances;
         registry.add(std::move(tool));
     }
+
+    registerInstanceTools(registry);
+    registerPlatformTools(registry);
+    registerSettingsTool(registry);
 }
 
 }  // namespace Mcp

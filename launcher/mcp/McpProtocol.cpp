@@ -5,9 +5,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 
-#include <exception>
-
-#include "mcp/McpSchema.h"
 
 namespace Mcp {
 
@@ -316,17 +313,6 @@ void Protocol::callTool(const Request& request, const Incoming& incoming, const 
         }
     };
 
-    if (!incoming.token.scopes.testFlag(tool->scope)) {
-        reply(ToolResult::error(QString("This token does not have the '%1' scope, which %2 needs.").arg(scopeName(tool->scope), name),
-                                "The user can grant it in the launcher: Settings > AI agents (MCP) > edit the token."));
-        return;
-    }
-    if (auto valid = Schema::validate(arguments, tool->inputSchema); !valid) {
-        reply(ToolResult::error(QString("Invalid arguments for %1: %2").arg(name, valid.error()),
-                                "Check the tool's inputSchema and call it again."));
-        return;
-    }
-
     CallContext context;
     context.token = incoming.token;
     context.clientName = request.clientName;
@@ -348,11 +334,7 @@ void Protocol::callTool(const Request& request, const Incoming& incoming, const 
         context.progress = [](double, std::optional<double>, const QString&) {};
     }
 
-    try {
-        tool->handler(context, arguments, reply);
-    } catch (const std::exception& e) {
-        reply(ToolResult::error(QString("Internal error in %1: %2").arg(name, QString::fromUtf8(e.what()))));
-    }
+    invokeTool(*tool, context, arguments, reply);
 }
 
 QJsonObject Protocol::result(const Request& request, QJsonObject body) const

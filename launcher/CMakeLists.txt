@@ -589,16 +589,28 @@ set(ATLAUNCHER_SOURCES
 )
 
 set(MCP_SOURCES
+    mcp/McpCommon.cpp
+    mcp/McpCommon.h
     mcp/McpHttp.cpp
     mcp/McpHttp.h
+    mcp/McpInstanceTools.cpp
+    mcp/McpInstanceTools.h
+    mcp/McpJobs.cpp
+    mcp/McpJobs.h
     mcp/McpLauncherTools.cpp
     mcp/McpLauncherTools.h
+    mcp/McpOps.cpp
+    mcp/McpOps.h
+    mcp/McpPlatformTools.cpp
+    mcp/McpPlatformTools.h
     mcp/McpProtocol.cpp
     mcp/McpProtocol.h
     mcp/McpSchema.cpp
     mcp/McpSchema.h
     mcp/McpService.cpp
     mcp/McpService.h
+    mcp/McpSettingsTool.cpp
+    mcp/McpSettingsTool.h
     mcp/McpTokens.cpp
     mcp/McpTokens.h
     mcp/McpTool.cpp

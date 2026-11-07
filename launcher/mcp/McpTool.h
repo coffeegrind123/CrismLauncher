@@ -78,6 +78,10 @@ class ToolRegistry {
     QList<Tool> m_tools;
 };
 
+// Runs a tool (or a catalog op) the way tools/call does: scope check, argument validation against inputSchema, and
+// an exception guard. `reply` is called exactly once unless the handler itself never replies.
+void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject& arguments, const ToolReply& reply);
+
 // Shared by error messages: the nearest strings by edit distance, best first
 QStringList closestMatches(const QString& needle, const QStringList& haystack, int maxResults = 3);
 

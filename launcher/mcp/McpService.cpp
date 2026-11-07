@@ -11,7 +11,9 @@
 
 #include "BuildConfig.h"
 #include "FileSystem.h"
+#include "mcp/McpInstanceTools.h"
 #include "mcp/McpLauncherTools.h"
+#include "mcp/McpOps.h"
 #include "settings/SettingsObject.h"
 
 namespace {
@@ -131,6 +133,8 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
     }
 
     Mcp::registerLauncherTools(m_tools);
+    Mcp::registerInstanceOps(m_ops);
+    Mcp::registerOpTools(m_tools, &m_ops);
 
     Mcp::ServerInfo info;
     info.name = BuildConfig.LAUNCHER_APP_BINARY_NAME;
@@ -357,11 +361,16 @@ QString McpService::instructions() const
                "This server controls %1, a Minecraft launcher running on the user's computer. The user may be using its window "
                "at the same time as you.\n"
                "Start with launcher_info (what exists, what this token may do), then instances (ids for everything else).\n"
+               "Direct tools cover the common work: instance_get, search_content / content_versions (Modrinth, CurseForge), "
+               "settings, jobs. Everything else is an op in a catalog: find ops with search_ops, run one with call, run several "
+               "with batch (\"$N.path\" passes an earlier step's result on).\n"
                "Ids: instances are addressed by the id from `instances`, never by name. Mod-platform projects are addressed by "
-               "platform plus project id.\n"
+               "platform plus projectId.\n"
+               "Slow work (installs, downloads) returns a job id at once; follow it with jobs action=wait.\n"
                "Permissions: each token has scopes (read, instances, content, launch, settings, accounts, files). A tool "
                "outside the token's scopes returns an error naming the scope; ask the user to grant it rather than retrying.\n"
-               "Secrets (account tokens, API keys, proxy passwords) are never returned.\n"
+               "Secrets (account tokens, API keys, proxy passwords) are never returned, and settings that can run programs or "
+               "redirect downloads can only be changed by the user.\n"
                "Errors with isError=true carry a hint on how to recover; follow it.")
         .arg(BuildConfig.LAUNCHER_DISPLAYNAME);
 }

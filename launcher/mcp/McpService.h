@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "mcp/McpHttp.h"
+#include "mcp/McpJobs.h"
 #include "mcp/McpProtocol.h"
 #include "mcp/McpTokens.h"
 #include "mcp/McpTool.h"
@@ -47,6 +48,8 @@ class McpService : public QObject {
 
     const QList<Mcp::CallRecord>& recentCalls() const { return m_recentCalls; }
     const Mcp::ToolRegistry& tools() const { return m_tools; }
+    const Mcp::ToolRegistry& ops() const { return m_ops; }
+    Mcp::JobRegistry* jobs() { return &m_jobs; }
 
    signals:
     void stateChanged();
@@ -62,6 +65,9 @@ class McpService : public QObject {
     QString m_dataRoot;
     Mcp::TokenStore m_tokens;
     Mcp::ToolRegistry m_tools;
+    // The op catalog behind search_ops / call / batch
+    Mcp::ToolRegistry m_ops;
+    Mcp::JobRegistry m_jobs;
     std::unique_ptr<Mcp::Protocol> m_protocol;
     Mcp::Http::Server* m_server = nullptr;
     QString m_lastError;

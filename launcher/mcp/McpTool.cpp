@@ -2,7 +2,10 @@
 #include "McpTool.h"
 
 #include <algorithm>
+#include <exception>
 #include <vector>
+
+#include "mcp/McpSchema.h"
 
 namespace Mcp {
 
@@ -83,6 +86,25 @@ QStringList ToolRegistry::suggest(const QString& name) const
         names.append(tool.name);
     }
     return closestMatches(name, names);
+}
+
+void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject& arguments, const ToolReply& reply)
+{
+    if (!context.token.scopes.testFlag(tool.scope)) {
+        reply(ToolResult::error(QString("This token does not have the '%1' scope, which %2 needs.").arg(scopeName(tool.scope), tool.name),
+                                "The user can grant it in the launcher: Settings > AI agents (MCP) > edit the token."));
+        return;
+    }
+    if (auto valid = Schema::validate(arguments, tool.inputSchema); !valid) {
+        reply(ToolResult::error(QString("Invalid arguments for %1: %2").arg(tool.name, valid.error()),
+                                "Check the inputSchema and call again."));
+        return;
+    }
+    try {
+        tool.handler(context, arguments, reply);
+    } catch (const std::exception& e) {
+        reply(ToolResult::error(QString("Internal error in %1: %2").arg(tool.name, QString::fromUtf8(e.what()))));
+    }
 }
 
 namespace {
