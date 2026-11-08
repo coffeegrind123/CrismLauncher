@@ -279,9 +279,9 @@ void updateOp(const CallContext& context, const QJsonObject& arguments, const To
                                         });
         auto out = summary;
         out["job"] = id;
-        auto result = ToolResult::ok(out, QString("Updating %1 file(s) as job %2; follow it with jobs action=wait.").arg(check->updates.size()).arg(id));
-        result.jobId = id;
-        reply(result);
+        auto started = ToolResult::ok(out, QString("Updating %1 file(s) as job %2; follow it with jobs action=wait.").arg(check->updates.size()).arg(id));
+        started.jobId = id;
+        reply(started);
     });
 }
 
