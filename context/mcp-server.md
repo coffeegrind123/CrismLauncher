@@ -235,7 +235,28 @@ with what was measured.
 
 | 2 | Done 2026-11-08 (`2e51d9b14`): confirmations (`invokeTool` + `McpActivityBar` prompt), Stop/Resume, `install_content`, `create_instance`, write ops (instance, groups, components, content), `InstanceTask::UnattendedChoices` in the Flame/Modrinth/import tasks. |
 | 3 | Done 2026-11-08 (`2306417f6`): `launch`, `logs`, ops `accounts.{set_default,set_for_instance,add_offline,remove,refresh,open_manager}`, `java.list_installs`. |
-| 4 | Written 2026-11-08: `files.*` (`5e82f0bc1`), `screenshots.*`, `window.screenshot`, `worlds.{rename,copy,backup,delete}`, `servers.{list,add,edit,remove}` (servers.dat code moved out of ServersPage into `minecraft/ServersDat.*`), `content.{check_updates,update}`, `instance.{export,copy}`, `pack.update`, MCP resources (api index, ops schema, instance summary/mods/latest log, guides) and prompts (build_modpack, fix_crash, update_instance, optimize). `java.{available,download}`. Not done: tasks extension and `subscriptions/listen` (jobs + polling cover them), MRTR elicitation (the launcher window asks). |
+| 4 | Written 2026-11-08: `files.*` (`5e82f0bc1`), `screenshots.*`, `window.screenshot`, `worlds.{rename,copy,backup,delete}`, `servers.{list,add,edit,remove}` (servers.dat code moved out of ServersPage into `minecraft/ServersDat.*`), `content.{check_updates,update}`, `instance.{export,copy}`, `pack.update`, MCP resources (api index, ops schema, instance summary/mods/latest log, guides) and prompts (build_modpack, fix_crash, update_instance, optimize). `java.{available,download}`. |
+| 6 | Written 2026-11-08 (asked for by the user after phase 5): MRTR in-chat confirmations, the tasks extension (`io.modelcontextprotocol/tasks`), `subscriptions/listen` (task ids, instance summary and mod-list resources). |
+
+Decisions made in phase 6:
+- **In-chat confirmations (MRTR)** are used when the request is 2026-07-28, its `clientCapabilities.elicitation` allows form
+  mode, and the token's "ask in the agent's chat" option is on (default on; per token in the token dialog). Otherwise the
+  launcher window asks, as before; legacy (2025) clients always use the window. The question is one boolean form field
+  `allow`. `requestState` is `base64url(payload).base64url(HMAC-SHA256)` with a per-process random key, binding the token
+  id, the tool name, a SHA-256 of the canonical arguments, the question key and a 15-minute expiry. A forged state is
+  refused; an expired one, or one for other arguments, asks again.
+- **batch asks once, up front**, for every step that needs confirmation (both channels): an MRTR retry re-runs the whole
+  call, so asking per step would re-apply earlier steps. Approved batches run with the policy lowered to never-ask.
+- **Tasks**: every tool that starts a job sets `ToolResult::jobId`; clients that declare the extension get a
+  `CreateTaskResult` (`resultType: "task"`, task id = job id) instead of the immediate `{job}` result, and `tasks/get`,
+  `tasks/update` (ack only: tasks never enter `input_required`, because confirmations finish before the job starts) and
+  `tasks/cancel` map onto the job registry, per token. A failed job is a `completed` task whose result has `isError`
+  (a tool execution error, not a JSON-RPC one). ttl 24 h, poll interval 2 s.
+- **subscriptions/listen** is an SSE stream that stays open: acknowledgment first, then `notifications/tasks` and
+  `notifications/resources/updated` for `launcher://instances/{id}/summary` (running state, properties) and
+  `/mods` (the mod folder rescanned). Tool, prompt and resource lists never change, so those notification types are not
+  acknowledged. On shutdown each subscription gets its graceful completion result. Task ids need the tasks extension
+  capability (-32021 otherwise).
 
 | 5 | Written 2026-11-08: `--mcp-stdio` relay (`McpStdioRelay`), "stdio clients" switch and its token (`McpStdioEnabled`, `McpStdioTokenId`, `<data>/mcp/stdio.json`), `TokenStore::rotate`. |
 
