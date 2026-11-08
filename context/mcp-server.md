@@ -238,6 +238,16 @@ with what was measured.
 | 4 | Written 2026-11-08: `files.*` (`5e82f0bc1`), `screenshots.*`, `window.screenshot`, `worlds.{rename,copy,backup,delete}`, `servers.{list,add,edit,remove}` (servers.dat code moved out of ServersPage into `minecraft/ServersDat.*`), `content.{check_updates,update}`, `instance.{export,copy}`, `pack.update`, MCP resources (api index, ops schema, instance summary/mods/latest log, guides) and prompts (build_modpack, fix_crash, update_instance, optimize). `java.{available,download}`. |
 | 6 | Written 2026-11-08 (asked for by the user after phase 5): MRTR in-chat confirmations, the tasks extension (`io.modelcontextprotocol/tasks`), `subscriptions/listen` (task ids, instance summary and mod-list resources). |
 
+| 7 | Written 2026-11-08 (asked for by the user): `system.run` behind two switches, the launcher-wide `McpAllowCommands` (off; ticking it shows a warning) and the token scope `commands` (never in the defaults). |
+
+Decisions made in phase 7:
+- **system.run is arbitrary code execution** and is treated that way: two switches only the user can set (`Mcp*` settings
+  are read-only to agents), every run is a destructive effect (the default policy asks each time), it starts in the data
+  folder (`cwd` must resolve inside it, but a shell can still go anywhere: the confirmation is the real gate), no stdin,
+  a timeout (default 120 s, max 1 h), the last 512 KiB of stdout/stderr, and each run is a job (cancellable with Stop).
+- **Porting closed mods is out of scope**: the first request that motivated this (ImmersiveVFX, 26.3 only) is "All Rights
+  Reserved" with no published source; the tool is for shuffling files, running Gradle on open-source mods, and similar.
+
 Decisions made in phase 6:
 - **In-chat confirmations (MRTR)** are used when the request is 2026-07-28, its `clientCapabilities.elicitation` allows form
   mode, and the token's "ask in the agent's chat" option is on (default on; per token in the token dialog). Otherwise the
