@@ -240,6 +240,18 @@ with what was measured.
 
 | 7 | Written 2026-11-08 (asked for by the user): `system.run` behind two switches, the launcher-wide `McpAllowCommands` (off; ticking it shows a warning) and the token scope `commands` (never in the defaults). |
 
+| 8 | Written 2026-11-08 (asked for by the user): porting help. `launcher://guide/mod-porting` (the user's personal-use terms verbatim, workflow, tool locations), `porting.analyze` (jar metadata, licence, source link, Java release, mixins, game packages used per class via a constant-pool scan, rendering share, effort rating, NeoForge primers between versions), `content.install_url`, prompt `port_mod`. |
+
+Decisions made in phase 8:
+- **The user's terms, verbatim, head the guide and every analysis result**: private repo for CI builds only, nothing
+  published, the jar only in the user's instance, the author's official build wins when it exists.
+- **porting.analyze reads class files itself** (constant pool: Class constants plus types in descriptors) rather than
+  needing a JDK on the user's machine; it reports, it does not decompile. Decompiling is the agent's step, with Vineflower.
+- **Primers** come from neoforged/.github (one per version step, 1.20 to 26.3 known); the list is hardcoded and the guide
+  says newer ones may exist upstream.
+- **content.install_url** is destructive (any code from any URL) and takes an `authorization` header for private release
+  assets, which is sent but never stored, logged or returned.
+
 Decisions made in phase 7:
 - **system.run is arbitrary code execution** and is treated that way: two switches only the user can set (`Mcp*` settings
   are read-only to agents), every run is a destructive effect (the default policy asks each time), it starts in the data
