@@ -7,10 +7,17 @@
 #include <minecraft/MinecraftInstance.h>
 #include <settings/INISettingsObject.h>
 
-// Global settings BaseInstance's constructor overrides per instance; nothing else is needed to construct one
-static const QStringList INSTANCE_OVERRIDES{ "AutoCloseConsole", "ConsoleMaxLines", "ConsoleOverflowStop", "LogPrePostOutput",
-                                             "PostExitCommand",  "PreLaunchCommand", "PreLoadCommand",     "RecordGameTime",
-                                             "ShowConsole",      "ShowConsoleOnError", "ShowGameTime",     "WrapperCommand" };
+// Global settings an instance overrides or passes through: BaseInstance's constructor and
+// MinecraftInstance::loadSpecificSettings (run by settings()) dereference each one
+static const QStringList INSTANCE_OVERRIDES{
+    "AutoCloseConsole", "ConsoleMaxLines", "ConsoleOverflowStop", "LogPrePostOutput", "PostExitCommand", "PreLaunchCommand",
+    "PreLoadCommand", "RecordGameTime", "ShowConsole", "ShowConsoleOnError", "ShowGameTime", "WrapperCommand",
+    "JavaPath", "JvmArgs", "IgnoreJavaCompatibility", "JavaSignature", "JavaArchitecture", "JavaRealArchitecture",
+    "JavaVersion", "JavaVendor", "LaunchMaximized", "MinecraftWinWidth", "MinecraftWinHeight", "MinMemAlloc",
+    "MaxMemAlloc", "PermGen", "LowMemWarning", "UseNativeOpenAL", "CustomOpenALPath", "UseNativeGLFW",
+    "CustomGLFWPath", "UseNativeSDL", "CustomSDLPath", "EnableFeralGamemode", "EnableMangoHud", "UseDiscreteGpu",
+    "UseZink", "CloseAfterLaunch", "QuitAfterGameStop", "OnlineFixes", "Env",
+};
 
 class McpContentTest : public QObject {
     Q_OBJECT
