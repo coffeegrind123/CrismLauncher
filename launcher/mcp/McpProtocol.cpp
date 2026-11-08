@@ -548,12 +548,12 @@ std::optional<QJsonObject> Protocol::verifyState(const QString& state) const
     }
     const auto expected = QMessageAuthenticationCode::hash(*data, m_stateKey, QCryptographicHash::Sha256);
     // Constant time: the comparison must not reveal how much of a forged code was right
-    if (expected.size() != mac->size()) {
+    if (expected.size() != mac.decoded.size()) {
         return std::nullopt;
     }
     unsigned char diff = 0;
     for (qsizetype i = 0; i < expected.size(); ++i) {
-        diff |= static_cast<unsigned char>(expected[i] ^ (*mac)[i]);
+        diff |= static_cast<unsigned char>(expected[i] ^ mac.decoded[i]);
     }
     if (diff != 0) {
         return std::nullopt;
