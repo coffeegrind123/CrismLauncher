@@ -39,7 +39,7 @@ bool constantTimeEquals(const QByteArray& a, const QByteArray& b)
 const QList<Scope>& allScopes()
 {
     static const QList<Scope> s_all{ Scope::Read,     Scope::Instances, Scope::Content, Scope::Launch,
-                                     Scope::Settings, Scope::Accounts,  Scope::Files };
+                                     Scope::Settings, Scope::Accounts,  Scope::Files,   Scope::Commands };
     return s_all;
 }
 
@@ -60,6 +60,8 @@ QString scopeName(Scope scope)
             return "accounts";
         case Scope::Files:
             return "files";
+        case Scope::Commands:
+            return "commands";
     }
     return {};
 }

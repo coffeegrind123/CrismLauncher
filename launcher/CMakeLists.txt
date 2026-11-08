@@ -591,6 +591,8 @@ set(ATLAUNCHER_SOURCES
 )
 
 set(MCP_SOURCES
+    mcp/McpCommandOps.cpp
+    mcp/McpCommandOps.h
     mcp/McpCommon.cpp
     mcp/McpCommon.h
     mcp/McpCreateTool.cpp

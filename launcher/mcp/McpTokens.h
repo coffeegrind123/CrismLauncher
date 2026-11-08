@@ -24,6 +24,7 @@ enum class Scope : quint32 {
     Settings = 1 << 4,   // change launcher and instance settings
     Accounts = 1 << 5,   // manage accounts (never reveals their tokens)
     Files = 1 << 6,      // raw file access inside an instance folder
+    Commands = 1 << 7,   // run programs on the user's computer (also needs the launcher-wide switch)
 };
 Q_DECLARE_FLAGS(Scopes, Scope)
 Q_DECLARE_OPERATORS_FOR_FLAGS(Scopes)

@@ -17,6 +17,7 @@
 #include "BuildConfig.h"
 #include "InstanceList.h"
 #include "FileSystem.h"
+#include "mcp/McpCommandOps.h"
 #include "mcp/McpCreateTool.h"
 #include "mcp/McpExportOps.h"
 #include "mcp/McpFileOps.h"
@@ -180,6 +181,7 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
     Mcp::registerExportOps(m_ops);
     Mcp::registerPackOps(m_ops);
     Mcp::registerJavaOps(m_ops);
+    Mcp::registerCommandOps(m_ops);
     Mcp::registerOpTools(m_tools, &m_ops);
 
     Mcp::ServerInfo info;
@@ -265,6 +267,8 @@ void McpService::registerSettings(SettingsObject* settings)
     // Lets `<launcher> --mcp-stdio` (Claude Desktop and other stdio-only clients) use the endpoint
     settings->registerSetting(SETTING_STDIO, false);
     settings->registerSetting(SETTING_STDIO_TOKEN, "");
+    // Lets agents with the `commands` scope run programs (system.run); only the user can turn it on
+    settings->registerSetting("McpAllowCommands", false);
 }
 
 void McpService::applySettings()

@@ -54,6 +54,8 @@ QString scopeLabel(Mcp::Scope scope)
             return McpPage::tr("Accounts: manage accounts (never reveals their tokens)");
         case Mcp::Scope::Files:
             return McpPage::tr("Files: read and write any file inside an instance folder");
+        case Mcp::Scope::Commands:
+            return McpPage::tr("Commands: run any program on this computer (also needs \"Allow agents to run commands\")");
     }
     return {};
 }
@@ -163,6 +165,8 @@ McpPage::McpPage(QWidget* parent) : QWidget(parent)
     stdioRow->addWidget(m_stdio, 1);
     stdioRow->addWidget(m_copyStdioConfig);
     serverForm->addRow(stdioRow);
+    m_allowCommands = new QCheckBox(this);
+    serverForm->addRow(m_allowCommands);
     layout->addLayout(serverForm);
 
     m_tokensLabel = new QLabel(this);
@@ -196,6 +200,21 @@ McpPage::McpPage(QWidget* parent) : QWidget(parent)
         const QJsonObject server{ { "command", QCoreApplication::applicationFilePath() }, { "args", QJsonArray{ "--mcp-stdio" } } };
         GuiUtil::setClipboardText(QString::fromUtf8(
             QJsonDocument(QJsonObject{ { "mcpServers", QJsonObject{ { SERVER_KEY, server } } } }).toJson(QJsonDocument::Indented)));
+    });
+    // Ticking it is a deliberate act: say plainly what it allows
+    connect(m_allowCommands, &QCheckBox::clicked, this, [this](bool checked) {
+        if (!checked) {
+            return;
+        }
+        const auto answer = QMessageBox::warning(
+            this, tr("Allow agents to run commands?"),
+            tr("Agents whose token has the \"commands\" scope will be able to run any program on this computer as you: install "
+               "or delete software, read your files, change your system. Only allow this for agents you trust.\n\n"
+               "With the default confirmation policy you are asked before every command."),
+            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+        if (answer != QMessageBox::Yes) {
+            m_allowCommands->setChecked(false);
+        }
     });
     connect(m_create, &QPushButton::clicked, this, &McpPage::createToken);
     connect(m_edit, &QPushButton::clicked, this, &McpPage::editToken);
@@ -231,6 +250,7 @@ void McpPage::retranslate()
     m_stdio->setText(tr("Allow clients that start the launcher as a command (Claude Desktop): they use the \"%1\" token")
                          .arg(QString("Local stdio clients")));
     m_copyStdioConfig->setText(tr("Copy Claude Desktop config"));
+    m_allowCommands->setText(tr("Allow agents to run commands on this computer (dangerous; also needs the token's \"commands\" scope)"));
     m_tokensLabel->setText(tr("Tokens"));
     m_tokenList->setHeaderLabels({ tr("Name"), tr("Scopes"), tr("Confirmation"), tr("Created"), tr("Last used") });
     m_create->setText(tr("Create token..."));
@@ -246,6 +266,7 @@ void McpPage::loadSettings()
     auto* settings = APPLICATION->settings();
     m_enabled->setChecked(settings->get("McpEnabled").toBool());
     m_stdio->setChecked(settings->get("McpStdioEnabled").toBool());
+    m_allowCommands->setChecked(settings->get("McpAllowCommands").toBool());
     const int port = settings->get("McpPort").toInt();
     m_port->setValue(port < MIN_PORT ? MIN_PORT - 1 : port);
 }
@@ -255,6 +276,7 @@ bool McpPage::apply()
     auto* settings = APPLICATION->settings();
     settings->set("McpEnabled", m_enabled->isChecked());
     settings->set("McpStdioEnabled", m_stdio->isChecked());
+    settings->set("McpAllowCommands", m_allowCommands->isChecked());
     settings->set("McpPort", m_port->value() < MIN_PORT ? 0 : m_port->value());
     if (auto* service = APPLICATION->mcp()) {
         service->applySettings();
