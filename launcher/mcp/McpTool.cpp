@@ -19,6 +19,13 @@ ToolResult ToolResult::ok(const QJsonValue& structured, const QString& text)
     return result;
 }
 
+ToolResult ToolResult::needsInput(const QJsonObject& inputRequired)
+{
+    ToolResult result;
+    result.inputRequired = inputRequired;
+    return result;
+}
+
 ToolResult ToolResult::error(const QString& message, const QString& hint)
 {
     ToolResult result;
@@ -126,6 +133,11 @@ QString defaultDescription(const Tool& tool, const QJsonObject& arguments)
 }
 }  // namespace
 
+QString describeAction(const Tool& tool, const QJsonObject& arguments)
+{
+    return tool.describeAction ? tool.describeAction(arguments) : defaultDescription(tool, arguments);
+}
+
 void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject& arguments, const ToolReply& reply)
 {
     if (!context.token.scopes.testFlag(tool.scope)) {
@@ -155,14 +167,19 @@ void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject&
         reply(ToolResult::error(QString("%1 needs the user's confirmation, and nobody can be asked here.").arg(tool.name)));
         return;
     }
-    const auto action = tool.describeAction ? tool.describeAction(arguments) : defaultDescription(tool, arguments);
-    context.confirm(action, [run, reply, name = tool.name](bool allowed, const QString& reason) {
-        if (!allowed) {
-            reply(ToolResult::error(QString("The user did not allow %1%2").arg(name, reason.isEmpty() ? QString(".") : ": " + reason),
-                                    "Do not retry the same change unless the user asks for it."));
-            return;
+    context.confirm({ describeAction(tool, arguments) }, [run, reply, name = tool.name](const ConfirmVerdict& verdict) {
+        switch (verdict.kind) {
+            case ConfirmVerdict::Kind::Allowed:
+                run();
+                return;
+            case ConfirmVerdict::Kind::NeedsInput:
+                reply(ToolResult::needsInput(verdict.inputRequired));
+                return;
+            case ConfirmVerdict::Kind::Denied:
+                reply(ToolResult::error(QString("The user did not allow %1%2").arg(name, verdict.reason.isEmpty() ? QString(".") : ": " + verdict.reason),
+                                        "Do not retry the same change unless the user asks for it."));
+                return;
         }
-        run();
     });
 }
 

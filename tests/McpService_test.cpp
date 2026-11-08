@@ -7,10 +7,33 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <mcp/McpJobs.h>
 #include <mcp/McpService.h>
 #include <settings/INISettingsObject.h>
 
 namespace {
+// A task the test finishes by hand
+class ManualTask : public Task {
+    Q_OBJECT
+   public:
+    void succeed() { emitSucceeded(); }
+
+   protected:
+    void executeTask() override {}
+};
+
+// Pumps the event loop until `buffer` holds `needle`
+bool waitFor(QTcpSocket& socket, QByteArray& buffer, const QByteArray& needle)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (!buffer.contains(needle) && timer.elapsed() < 5000) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        buffer += socket.readAll();
+    }
+    return buffer.contains(needle);
+}
+
 struct Response {
     int status = 0;
     QByteArray head;
@@ -73,6 +96,7 @@ class McpServiceTest : public QObject {
     std::unique_ptr<INISettingsObject> m_settings;
     std::unique_ptr<McpService> m_service;
     QString m_secret;
+    QString m_tokenId;
 
     QByteArray post(const QByteArray& body, const QList<QByteArray>& extraHeaders, bool withToken = true, const QByteArray& host = {}) const
     {
@@ -126,7 +150,9 @@ class McpServiceTest : public QObject {
         QVERIFY(m_service->port() != 0);
         QCOMPARE(m_settings->get("McpPort").toInt(), static_cast<int>(m_service->port()));
 
-        m_secret = m_service->tokens().create("test", Mcp::Scope::Read, Mcp::ConfirmPolicy::NeverAsk).second;
+        const auto [token, secret] = m_service->tokens().create("test", Mcp::Scope::Read, Mcp::ConfirmPolicy::NeverAsk);
+        m_secret = secret;
+        m_tokenId = token.id;
         QVERIFY(m_service->saveTokens().has_value());
     }
 
@@ -240,6 +266,38 @@ class McpServiceTest : public QObject {
             sorted.sort();
             return sorted;
         }());
+    }
+
+    void taskSubscriptionStreams()
+    {
+        auto task = makeShared<ManualTask>();
+        const auto jobId = m_service->jobs()->start(m_tokenId, "test", "A job", task);
+
+        const QJsonObject meta{ { "io.modelcontextprotocol/protocolVersion", "2026-07-28" },
+                                { "io.modelcontextprotocol/clientCapabilities",
+                                  QJsonObject{ { "extensions", QJsonObject{ { "io.modelcontextprotocol/tasks", QJsonObject{} } } } } } };
+        const auto listen = QJsonDocument(QJsonObject{ { "jsonrpc", "2.0" },
+                                                       { "id", 7 },
+                                                       { "method", "subscriptions/listen" },
+                                                       { "params", QJsonObject{ { "_meta", meta },
+                                                                                { "notifications", QJsonObject{ { "taskIds", QJsonArray{ jobId, "not-mine" } } } } } } })
+                                .toJson(QJsonDocument::Compact);
+
+        QTcpSocket socket;
+        socket.connectToHost(QHostAddress::LocalHost, m_service->port());
+        QVERIFY(socket.waitForConnected(5000));
+        socket.write(post(listen, { "MCP-Protocol-Version: 2026-07-28", "Mcp-Method: subscriptions/listen" }));
+
+        QByteArray buffer;
+        QVERIFY(waitFor(socket, buffer, "notifications/subscriptions/acknowledged"));
+        QVERIFY(buffer.contains("text/event-stream"));
+        QVERIFY(buffer.contains(jobId.toLatin1()));
+        QVERIFY(!buffer.contains("not-mine"));
+
+        task->succeed();
+        QVERIFY(waitFor(socket, buffer, "notifications/tasks"));
+        QVERIFY(waitFor(socket, buffer, "\"completed\""));
+        QVERIFY(buffer.contains("subscriptionId\":7"));
     }
 
     void auditLogHasNoSecrets()

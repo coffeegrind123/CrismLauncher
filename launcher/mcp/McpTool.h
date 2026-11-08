@@ -6,6 +6,7 @@
 #include <QJsonValue>
 #include <QList>
 #include <QString>
+#include <QStringList>
 
 #include <functional>
 #include <memory>
@@ -14,6 +15,20 @@
 #include "mcp/McpTokens.h"
 
 namespace Mcp {
+
+// The answer to a confirmation question
+struct ConfirmVerdict {
+    enum class Kind { Allowed, Denied, NeedsInput };
+    Kind kind = Kind::Denied;
+    QString reason;
+    // NeedsInput: the InputRequiredResult (inputRequests + requestState) that asks the user through the agent's client
+    QJsonObject inputRequired;
+
+    static ConfirmVerdict allowed() { return { Kind::Allowed, {}, {} }; }
+    static ConfirmVerdict denied(const QString& reason) { return { Kind::Denied, reason, {} }; }
+    static ConfirmVerdict needsInput(const QJsonObject& inputRequired) { return { Kind::NeedsInput, {}, inputRequired }; }
+};
+using ConfirmAnswer = std::function<void(const ConfirmVerdict&)>;
 
 // Who is calling and how to talk back while a call runs. Tools never see HTTP.
 struct CallContext {
@@ -27,9 +42,10 @@ struct CallContext {
     // Set when the client went away or cancelled; long tools check it and stop
     std::shared_ptr<bool> cancelled = std::make_shared<bool>(false);
 
-    // Asks the human to allow `action` (one sentence, e.g. "Delete instance 'Foo'"). Unset means nobody can answer, which
+    // Asks the human to allow `actions` (one sentence each, e.g. "Delete instance 'Foo'"), all at once. Answered in the
+    // launcher window, or through the agent's client when it supports elicitation. Unset means nobody can answer, which
     // counts as a refusal.
-    std::function<void(const QString& action, std::function<void(bool allowed, const QString& reason)>)> confirm;
+    std::function<void(const QStringList& actions, const ConfirmAnswer& answer)> confirm;
 };
 
 // What a call does, which decides whether the token's policy asks the human first
@@ -40,6 +56,12 @@ struct ToolResult {
     QString text;              // text content; when empty the structured value is rendered as JSON
     QJsonArray extraContent;   // images, resource links
     bool isError = false;
+    // The call started this job; clients of the tasks extension get a task for it instead of this result
+    QString jobId;
+    // Set instead of a result when the user must answer first (MRTR InputRequiredResult)
+    std::optional<QJsonObject> inputRequired;
+
+    static ToolResult needsInput(const QJsonObject& inputRequired);
 
     static ToolResult ok(const QJsonValue& structured, const QString& text = {});
     // `hint` tells the model how to recover ("call instances to list valid ids")
@@ -95,6 +117,8 @@ class ToolRegistry {
 };
 
 bool needsConfirmation(Effect effect, ConfirmPolicy policy);
+// The sentence the user is asked to confirm for this call
+QString describeAction(const Tool& tool, const QJsonObject& arguments);
 
 // Runs a tool (or a catalog op) the way tools/call does: scope check, argument validation against inputSchema, the
 // token's confirmation policy, and an exception guard. `reply` is called exactly once unless the handler itself never replies.

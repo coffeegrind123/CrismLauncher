@@ -2,9 +2,12 @@
 #pragma once
 
 #include <QHash>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 #include <functional>
 #include <memory>
@@ -21,7 +24,7 @@ class SettingsObject;
 struct McpConfirmRequest {
     QString tokenName;
     QString clientName;
-    QString action;
+    QStringList actions;  // one sentence each; asked together and answered once
 };
 
 // The launcher's MCP endpoint: http://127.0.0.1:<port>/mcp. Off until the user enables it; while off no socket is open.
@@ -80,6 +83,20 @@ class McpService : public QObject {
     void activityChanged();
 
    private:
+    struct Subscription {
+        QJsonValue id;
+        QString tokenId;
+        QStringList uris;
+        QStringList taskIds;
+        Mcp::ExchangePtr exchange;
+        QObject* guard;  // owns the signal connections this subscription needs
+    };
+
+    std::optional<QJsonObject> taskState(const QString& taskId, const QString& tokenId) const;
+    void addSubscription(const QJsonValue& id, const QJsonObject& filter, const Mcp::TokenInfo& token, const Mcp::ExchangePtr& exchange);
+    void removeSubscription(const QJsonValue& id, const Mcp::ExchangePtr& exchange);
+    void resourceUpdated(const QString& uri);
+    void taskUpdated(const QString& taskId);
     void handleHttp(const Mcp::Http::Request& request, const Mcp::Http::ResponderPtr& responder);
     void recordCall(const Mcp::CallRecord& record);
     void updateStdioConfig();
@@ -100,6 +117,7 @@ class McpService : public QObject {
     QString m_lastError;
     QList<Mcp::CallRecord> m_recentCalls;
     Prompter m_prompter;
+    QList<Subscription> m_subscriptions;
     bool m_paused = false;
     int m_activeCalls = 0;
     Mcp::CallRecord m_lastStarted;

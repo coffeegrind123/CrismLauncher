@@ -80,7 +80,7 @@ QString formatTime(const QDateTime& time)
 }
 
 // The token editor: name, scopes, confirmation policy. Returns false when cancelled.
-bool editTokenDialog(QWidget* parent, const QString& title, QString& name, Mcp::Scopes& scopes, Mcp::ConfirmPolicy& policy)
+bool editTokenDialog(QWidget* parent, const QString& title, QString& name, Mcp::Scopes& scopes, Mcp::ConfirmPolicy& policy, bool& chat)
 {
     QDialog dialog(parent);
     dialog.setWindowTitle(title);
@@ -110,6 +110,10 @@ bool editTokenDialog(QWidget* parent, const QString& title, QString& name, Mcp::
     }
     policyBox->setCurrentIndex(std::max(0, policyBox->findData(static_cast<int>(policy))));
     policyForm->addRow(McpPage::tr("Confirmation:"), policyBox);
+    auto* chatBox = new QCheckBox(McpPage::tr("Ask in the agent's chat when its app supports it (otherwise in this window)"), &dialog);
+    chatBox->setToolTip(McpPage::tr("The agent's app shows the question and passes on your answer. Turn this off to always answer here."));
+    chatBox->setChecked(chat);
+    policyForm->addRow(chatBox);
     layout->addLayout(policyForm);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
@@ -128,6 +132,7 @@ bool editTokenDialog(QWidget* parent, const QString& title, QString& name, Mcp::
         }
     }
     policy = static_cast<Mcp::ConfirmPolicy>(policyBox->currentData().toInt());
+    chat = chatBox->isChecked();
     return true;
 }
 }  // namespace
@@ -289,7 +294,8 @@ void McpPage::refreshTokens()
         auto* item = new QTreeWidgetItem(m_tokenList);
         item->setText(NameColumn, token.name);
         item->setText(ScopesColumn, Mcp::scopeNames(token.scopes).join(", "));
-        item->setText(PolicyColumn, policyLabel(token.policy));
+        item->setText(PolicyColumn, token.chatConfirmations ? tr("%1 (in the agent's chat if possible)").arg(policyLabel(token.policy))
+                                                            : policyLabel(token.policy));
         item->setText(CreatedColumn, formatTime(token.created));
         item->setText(LastUsedColumn, formatTime(token.lastUsed));
         item->setData(NameColumn, Qt::UserRole, token.id);
@@ -342,10 +348,12 @@ void McpPage::createToken()
     QString name;
     Mcp::Scopes scopes = Mcp::Scope::Read | Mcp::Scope::Instances | Mcp::Scope::Content | Mcp::Scope::Launch;
     auto policy = Mcp::ConfirmPolicy::AskDestructive;
-    if (!editTokenDialog(this, tr("Create token"), name, scopes, policy)) {
+    bool chat = true;
+    if (!editTokenDialog(this, tr("Create token"), name, scopes, policy, chat)) {
         return;
     }
     const auto [token, secret] = service->tokens().create(name, scopes, policy);
+    service->tokens().setChatConfirmations(token.id, chat);
     if (auto res = service->saveTokens(); !res) {
         service->tokens().revoke(token.id);
         QMessageBox::critical(this, tr("Could not save the token"), res.error());
@@ -369,10 +377,12 @@ void McpPage::editToken()
     QString name = token->name;
     Mcp::Scopes scopes = token->scopes;
     auto policy = token->policy;
-    if (!editTokenDialog(this, tr("Edit token"), name, scopes, policy)) {
+    bool chat = token->chatConfirmations;
+    if (!editTokenDialog(this, tr("Edit token"), name, scopes, policy, chat)) {
         return;
     }
     service->tokens().update(id, name, scopes, policy);
+    service->tokens().setChatConfirmations(id, chat);
     if (auto res = service->saveTokens(); !res) {
         QMessageBox::critical(this, tr("Could not save the token"), res.error());
     }

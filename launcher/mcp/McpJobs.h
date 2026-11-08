@@ -30,6 +30,7 @@ struct JobInfo {
     QString status;
     QString error;
     QDateTime started;
+    QDateTime updated;
     QDateTime finished;
     QJsonObject result;  // filled by the job's result builder once it succeeded
 

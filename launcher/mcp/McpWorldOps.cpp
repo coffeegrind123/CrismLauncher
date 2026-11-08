@@ -71,7 +71,9 @@ void startWorldJob(const CallContext& context, std::unique_ptr<Task> task, const
         return;
     }
     const auto id = registry->start(context.token.id, context.token.name, title, Task::Ptr(task.release()));
-    reply(ToolResult::ok(QJsonObject{ { "job", id } }, QString("Started job %1; follow it with jobs action=wait.").arg(id)));
+    auto result = ToolResult::ok(QJsonObject{ { "job", id } }, QString("Started job %1; follow it with jobs action=wait.").arg(id));
+    result.jobId = id;
+    reply(result);
 }
 
 // --- worlds ---

@@ -46,6 +46,8 @@ struct TokenInfo {
     QByteArray hash;  // SHA-256 of the secret; the secret itself is never stored
     Scopes scopes;
     ConfirmPolicy policy = ConfirmPolicy::AskDestructive;
+    // Ask in the agent's chat when its client supports elicitation; otherwise, or when off, in the launcher window
+    bool chatConfirmations = true;
     QDateTime created;
     QDateTime lastUsed;
 };
@@ -64,6 +66,7 @@ class TokenStore {
     std::pair<TokenInfo, QString> create(const QString& name, Scopes scopes, ConfirmPolicy policy);
     bool revoke(const QString& id);
     bool update(const QString& id, const QString& name, Scopes scopes, ConfirmPolicy policy);
+    bool setChatConfirmations(const QString& id, bool enabled);
     // A new secret for an existing token (same scopes and policy); the old secret stops working
     std::optional<QString> rotate(const QString& id);
 

@@ -140,8 +140,10 @@ void javaDownload(const CallContext& context, const QJsonObject& arguments, cons
                                                 runTask(APPLICATION->javalist()->getLoadTask(true), [](bool, const QString&) {});
                                                 return QJsonObject{ { "path", finalPath } };
                                             });
-            reply(ToolResult::ok(QJsonObject{ { "job", id }, { "build", meta->m_name }, { "path", finalPath } },
-                                 QString("Downloading %1 as job %2; follow it with jobs action=wait.").arg(meta->m_name, id)));
+            auto result = ToolResult::ok(QJsonObject{ { "job", id }, { "build", meta->m_name }, { "path", finalPath } },
+                                         QString("Downloading %1 as job %2; follow it with jobs action=wait.").arg(meta->m_name, id));
+            result.jobId = id;
+            reply(result);
         });
     });
 }

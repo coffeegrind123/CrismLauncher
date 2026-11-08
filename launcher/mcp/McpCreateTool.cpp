@@ -103,9 +103,10 @@ void startCreation(const CallContext& context, InstanceTask* task, const Options
         }
         return QJsonObject{ { "instanceId", *newId } };
     });
-    reply(ToolResult::ok(QJsonObject{ { "job", jobId } }, QString("Creating the instance as job %1; follow it with jobs action=wait. Its "
-                                                                  "result holds the new instance.")
-                                                              .arg(jobId)));
+    auto result = ToolResult::ok(QJsonObject{ { "job", jobId } },
+                                 QString("Creating the instance as job %1; follow it with jobs action=wait. Its result holds the new instance.").arg(jobId));
+    result.jobId = jobId;
+    reply(result);
 }
 
 void createVanilla(const CallContext& context, const QJsonObject& arguments, Options options, const ToolReply& reply)

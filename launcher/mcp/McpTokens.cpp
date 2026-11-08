@@ -145,6 +145,7 @@ Result<> TokenStore::load()
         }
         token.scopes = scopesFromNames(names);
         token.policy = policyFromName(obj["policy"].toString()).value_or(ConfirmPolicy::AskDestructive);
+        token.chatConfirmations = obj["chatConfirmations"].toBool(true);
         token.created = QDateTime::fromString(obj["created"].toString(), Qt::ISODate);
         token.lastUsed = QDateTime::fromString(obj["lastUsed"].toString(), Qt::ISODate);
         if (token.id.isEmpty() || token.hash.size() != QCryptographicHash::hashLength(QCryptographicHash::Sha256)) {
@@ -166,6 +167,7 @@ Result<> TokenStore::save() const
         obj["sha256"] = QString::fromLatin1(token.hash.toHex());
         obj["scopes"] = QJsonArray::fromStringList(scopeNames(token.scopes));
         obj["policy"] = policyName(token.policy);
+        obj["chatConfirmations"] = token.chatConfirmations;
         obj["created"] = token.created.toString(Qt::ISODate);
         if (token.lastUsed.isValid()) {
             obj["lastUsed"] = token.lastUsed.toString(Qt::ISODate);
@@ -232,6 +234,17 @@ std::optional<QString> TokenStore::rotate(const QString& id)
         }
     }
     return std::nullopt;
+}
+
+bool TokenStore::setChatConfirmations(const QString& id, bool enabled)
+{
+    for (auto& token : m_tokens) {
+        if (token.id == id) {
+            token.chatConfirmations = enabled;
+            return true;
+        }
+    }
+    return false;
 }
 
 std::optional<TokenInfo> TokenStore::find(const QString& id) const

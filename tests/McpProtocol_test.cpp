@@ -38,6 +38,9 @@ class FakeExchange : public Exchange {
         m_outcome->response = response;
     }
     std::shared_ptr<bool> cancelled() const override { return m_cancelled; }
+    bool canStream() const override { return m_canStream; }
+
+    bool m_canStream = true;
 
    private:
     Outcome* m_outcome;
@@ -125,6 +128,17 @@ class McpProtocolTest : public QObject {
         files.handler = [](const CallContext&, const QJsonObject&, const ToolReply& reply) { reply(ToolResult::ok(QJsonObject{})); };
         m_tools.add(files);
 
+        Tool starter;
+        starter.name = "start_job";
+        starter.description = "Starts a job";
+        starter.inputSchema = Schema::object({});
+        starter.handler = [](const CallContext&, const QJsonObject&, const ToolReply& reply) {
+            auto result = ToolResult::ok(QJsonObject{ { "job", "j1" } });
+            result.jobId = "j1";
+            reply(result);
+        };
+        m_tools.add(starter);
+
         Tool thrower;
         thrower.name = "throws";
         thrower.description = "Throws";
@@ -157,7 +171,7 @@ class McpProtocolTest : public QObject {
     {
         const auto out = run(legacy("tools/list", {}, {}));
         QCOMPARE(out.status, 200);
-        QCOMPARE(out.response["result"].toObject()["tools"].toArray().size(), 3);
+        QCOMPARE(out.response["result"].toObject()["tools"].toArray().size(), 4);
     }
 
     void modernDiscover()
@@ -178,10 +192,11 @@ class McpProtocolTest : public QObject {
         const auto out = run(modern("tools/list"));
         const auto result = out.response["result"].toObject();
         const auto tools = result["tools"].toArray();
-        QCOMPARE(tools.size(), 3);
+        QCOMPARE(tools.size(), 4);
         QCOMPARE(tools[0].toObject()["name"].toString(), QString("delete_files"));
         QCOMPARE(tools[1].toObject()["name"].toString(), QString("echo"));
-        QCOMPARE(tools[2].toObject()["name"].toString(), QString("throws"));
+        QCOMPARE(tools[2].toObject()["name"].toString(), QString("start_job"));
+        QCOMPARE(tools[3].toObject()["name"].toString(), QString("throws"));
         QVERIFY(tools[0].toObject()["annotations"].toObject()["destructiveHint"].toBool());
         QVERIFY(!tools[1].toObject()["annotations"].toObject().contains("destructiveHint"));
         QVERIFY(result.contains("ttlMs"));
@@ -365,6 +380,158 @@ class McpProtocolTest : public QObject {
         const auto out = run(in);
         QCOMPARE(out.kind, Outcome::Rejected);
         QCOMPARE(out.status, 400);
+    }
+
+   private:
+    Incoming withCapabilities(Incoming in, const QJsonObject& capabilities) const
+    {
+        auto params = in.message["params"].toObject();
+        auto meta = params["_meta"].toObject();
+        meta["io.modelcontextprotocol/clientCapabilities"] = capabilities;
+        params["_meta"] = meta;
+        in.message["params"] = params;
+        return in;
+    }
+
+    Incoming deleteCall(const QJsonObject& arguments, const QJsonObject& retry = {}) const
+    {
+        QJsonObject params{ { "name", "delete_files" }, { "arguments", arguments } };
+        for (auto it = retry.begin(); it != retry.end(); ++it) {
+            params[it.key()] = it.value();
+        }
+        auto in = withCapabilities(modern("tools/call", params, "delete_files"), QJsonObject{ { "elicitation", QJsonObject{} } });
+        in.token.id = "token-1";
+        in.token.scopes = Scope::Read | Scope::Files;
+        in.token.policy = ConfirmPolicy::AskDestructive;
+        in.token.chatConfirmations = true;
+        return in;
+    }
+
+   private slots:
+    void chatConfirmationRoundTrip()
+    {
+        // 1. A destructive call from a client that can show forms comes back as a question
+        auto out = run(deleteCall(QJsonObject{}));
+        QCOMPARE(out.kind, Outcome::Finished);
+        auto result = out.response["result"].toObject();
+        QCOMPARE(result["resultType"].toString(), QString("input_required"));
+        const auto requests = result["inputRequests"].toObject();
+        QCOMPARE(requests.size(), 1);
+        const auto key = requests.keys().first();
+        const auto elicitation = requests[key].toObject();
+        QCOMPARE(elicitation["method"].toString(), QString("elicitation/create"));
+        QCOMPARE(elicitation["params"].toObject()["mode"].toString(), QString("form"));
+        const auto state = result["requestState"].toString();
+        QVERIFY(!state.isEmpty());
+
+        // 2. The retry carries the user's yes: the tool runs
+        auto accept = QJsonObject{ { key, QJsonObject{ { "action", "accept" }, { "content", QJsonObject{ { "allow", true } } } } } };
+        out = run(deleteCall(QJsonObject{}, QJsonObject{ { "inputResponses", accept }, { "requestState", state } }));
+        result = out.response["result"].toObject();
+        QCOMPARE(result["resultType"].toString(), QString("complete"));
+        QVERIFY(!result["isError"].toBool());
+
+        // 3. A no is refused
+        auto decline = QJsonObject{ { key, QJsonObject{ { "action", "decline" } } } };
+        out = run(deleteCall(QJsonObject{}, QJsonObject{ { "inputResponses", decline }, { "requestState", state } }));
+        result = out.response["result"].toObject();
+        QVERIFY(result["isError"].toBool());
+        QVERIFY(result["content"].toArray()[0].toObject()["text"].toString().contains("declined"));
+
+        // 4. A forged state is refused
+        auto forged = state;
+        forged[forged.size() - 2] = forged[forged.size() - 2] == 'A' ? 'B' : 'A';
+        out = run(deleteCall(QJsonObject{}, QJsonObject{ { "inputResponses", accept }, { "requestState", forged } }));
+        QVERIFY(out.response["result"].toObject()["isError"].toBool());
+
+        // 5. The answer does not carry over to other arguments: asked again
+        out = run(deleteCall(QJsonObject{ { "extra", 1 } }, QJsonObject{ { "inputResponses", accept }, { "requestState", state } }));
+        QVERIFY(out.response["result"].toObject()["isError"].toBool() ||
+                out.response["result"].toObject()["resultType"].toString() == "input_required");
+    }
+
+    void noChatWithoutElicitationOrWhenTurnedOff()
+    {
+        auto in = deleteCall(QJsonObject{});
+        in = withCapabilities(in, QJsonObject{});
+        auto out = run(in);
+        // No form support and no launcher prompter in this test: refused, never silently allowed
+        QVERIFY(out.response["result"].toObject()["isError"].toBool());
+
+        in = deleteCall(QJsonObject{});
+        in.token.chatConfirmations = false;
+        out = run(in);
+        QVERIFY(out.response["result"].toObject()["isError"].toBool());
+    }
+
+    void tasks()
+    {
+        m_protocol->taskState = [](const QString& id, const QString& token) -> std::optional<QJsonObject> {
+            if (id != "j1" || token != "token-1") {
+                return std::nullopt;
+            }
+            return QJsonObject{ { "taskId", "j1" }, { "status", "working" }, { "createdAt", "2026-11-08T00:00:00Z" },
+                                { "lastUpdatedAt", "2026-11-08T00:00:00Z" }, { "ttlMs", 1000 }, { "pollIntervalMs", 500 } };
+        };
+        bool cancelled = false;
+        m_protocol->taskCancel = [&cancelled](const QString&, const QString&) { return cancelled = true; };
+
+        auto call = modern("tools/call", QJsonObject{ { "name", "start_job" }, { "arguments", QJsonObject{} } }, "start_job");
+        call.token.id = "token-1";
+
+        // Without the extension: the ordinary result
+        auto out = run(call);
+        QCOMPARE(out.response["result"].toObject()["resultType"].toString(), QString("complete"));
+
+        // With it: a task
+        out = run(withCapabilities(call, QJsonObject{ { "extensions", QJsonObject{ { TASKS_EXTENSION, QJsonObject{} } } } }));
+        auto result = out.response["result"].toObject();
+        QCOMPARE(result["resultType"].toString(), QString("task"));
+        QCOMPARE(result["taskId"].toString(), QString("j1"));
+        QCOMPARE(result["status"].toString(), QString("working"));
+
+        auto get = modern("tasks/get", QJsonObject{ { "taskId", "j1" } }, "j1");
+        get.token.id = "token-1";
+        out = run(get);
+        QCOMPARE(out.response["result"].toObject()["status"].toString(), QString("working"));
+        QCOMPARE(out.response["result"].toObject()["resultType"].toString(), QString("complete"));
+
+        get.token.id = "someone-else";
+        QCOMPARE(run(get).kind, Outcome::Rejected);
+
+        auto cancel = modern("tasks/cancel", QJsonObject{ { "taskId", "j1" } }, "j1");
+        cancel.token.id = "token-1";
+        QCOMPARE(run(cancel).kind, Outcome::Finished);
+        QVERIFY(cancelled);
+
+        // Mcp-Name mirrors the task id
+        auto wrongName = modern("tasks/get", QJsonObject{ { "taskId", "j1" } }, "j2");
+        QCOMPARE(run(wrongName).response["error"].toObject()["code"].toInt(), ERROR_HEADER_MISMATCH);
+
+        m_protocol->taskState = nullptr;
+        m_protocol->taskCancel = nullptr;
+    }
+
+    void subscriptions()
+    {
+        QJsonObject seenFilter;
+        m_protocol->listen = [&seenFilter](const QJsonValue&, const QJsonObject& filter, const TokenInfo&, const ExchangePtr&) { seenFilter = filter; };
+
+        auto listen = modern("subscriptions/listen", QJsonObject{ { "notifications", QJsonObject{ { "taskIds", QJsonArray{ "j1" } } } } });
+        auto out = run(listen);
+        QCOMPARE(out.response["error"].toObject()["code"].toInt(), ERROR_MISSING_CAPABILITY);
+
+        out = run(withCapabilities(listen, QJsonObject{ { "extensions", QJsonObject{ { TASKS_EXTENSION, QJsonObject{} } } } }));
+        QCOMPARE(out.kind, Outcome::None);
+        QCOMPARE(seenFilter["taskIds"].toArray().size(), 1);
+
+        Outcome noStream;
+        auto exchange = std::make_shared<FakeExchange>(&noStream);
+        exchange->m_canStream = false;
+        m_protocol->handle(modern("subscriptions/listen", QJsonObject{ { "notifications", QJsonObject{} } }), exchange);
+        QCOMPARE(noStream.kind, Outcome::Rejected);
+
+        m_protocol->listen = nullptr;
     }
 };
 

@@ -15,6 +15,7 @@ class McpOpsTest : public QObject {
     QStringList m_ran;
 
     QStringList m_asked;
+    QList<QStringList> m_questions;
 
     ToolResult run(const QString& toolName,
                    const QJsonObject& arguments,
@@ -28,9 +29,10 @@ class McpOpsTest : public QObject {
         context.token.policy = policy;
         context.progress = [](double, std::optional<double>, const QString&) {};
         if (answer) {
-            context.confirm = [this, allowed = *answer](const QString& action, std::function<void(bool, const QString&)> done) {
-                m_asked.append(action);
-                done(allowed, allowed ? QString() : QString("declined"));
+            context.confirm = [this, allowed = *answer](const QStringList& actions, const ConfirmAnswer& done) {
+                m_asked.append(actions.join(" | "));
+                m_questions.append(actions);
+                done(allowed ? ConfirmVerdict::allowed() : ConfirmVerdict::denied("declined"));
             };
         }
         ToolResult out;
@@ -102,6 +104,7 @@ class McpOpsTest : public QObject {
     {
         m_ran.clear();
         m_asked.clear();
+        m_questions.clear();
     }
 
     void references_data()
@@ -247,6 +250,25 @@ class McpOpsTest : public QObject {
         result = run("call", write, scopes, ConfirmPolicy::NeverAsk);
         QVERIFY(!result.isError);
         QVERIFY(m_asked.isEmpty());
+    }
+
+    void batchAsksOnceUpFront()
+    {
+        const auto scopes = Scope::Read | Scope::Files;
+        const auto ops = QJsonArray{ step("files.write"), step("items.make"), step("files.write") };
+
+        // One question listing both writes, then every step runs without asking again
+        auto result = run("batch", QJsonObject{ { "ops", ops } }, scopes, ConfirmPolicy::AskDestructive, true);
+        QVERIFY(!result.isError);
+        QCOMPARE(m_questions.size(), 1);
+        QCOMPARE(m_questions.first().size(), 2);
+        QCOMPARE(m_ran, QStringList({ "files.write", "items.make", "files.write" }));
+
+        // Declined: nothing runs
+        init();
+        result = run("batch", QJsonObject{ { "ops", ops } }, scopes, ConfirmPolicy::AskDestructive, false);
+        QVERIFY(result.isError);
+        QVERIFY(m_ran.isEmpty());
     }
 
     void needsConfirmationTable()

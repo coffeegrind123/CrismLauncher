@@ -149,6 +149,8 @@ QJsonObject resultEntry(const QString& op, const ToolResult& result)
     return entry;
 }
 
+void executeBatch(const ToolRegistry* ops, const CallContext& context, const QJsonArray& steps, bool continueOnError, const ToolReply& reply);
+
 void runBatch(const ToolRegistry* ops, const CallContext& context, const QJsonObject& arguments, const ToolReply& reply)
 {
     const auto steps = arguments.value("ops").toArray();
@@ -171,6 +173,46 @@ void runBatch(const ToolRegistry* ops, const CallContext& context, const QJsonOb
         }
     }
 
+    // One question for every step that needs the user's approval, before any step runs: asking step by step would
+    // leave the earlier steps applied whenever the user is asked through the agent's client (which retries the call)
+    QStringList actions;
+    for (const auto& value : steps) {
+        const auto step = value.toObject();
+        const auto* op = ops->find(step.value("op").toString());
+        const auto stepArguments = step.value("arguments").toObject();
+        if (!op->delegatesConfirmation && needsConfirmation(op->effectFor(stepArguments), context.token.policy)) {
+            actions.append(describeAction(*op, stepArguments));
+        }
+    }
+    if (actions.isEmpty()) {
+        executeBatch(ops, context, steps, continueOnError, reply);
+        return;
+    }
+    if (!context.confirm) {
+        reply(ToolResult::error("Some steps need the user's confirmation, and nobody can be asked here. Nothing was run."));
+        return;
+    }
+    context.confirm(actions, [ops, context, steps, continueOnError, reply](const ConfirmVerdict& verdict) {
+        switch (verdict.kind) {
+            case ConfirmVerdict::Kind::NeedsInput:
+                reply(ToolResult::needsInput(verdict.inputRequired));
+                return;
+            case ConfirmVerdict::Kind::Denied:
+                reply(ToolResult::error(QString("The user did not allow this batch%1 Nothing was run.").arg(verdict.reason.isEmpty() ? QString(".") : ": " + verdict.reason + "."),
+                                        "Do not retry the same changes unless the user asks for them."));
+                return;
+            case ConfirmVerdict::Kind::Allowed:
+                break;
+        }
+        // Approved as a whole: the steps must not ask again one by one
+        auto approved = context;
+        approved.token.policy = ConfirmPolicy::NeverAsk;
+        executeBatch(ops, approved, steps, continueOnError, reply);
+    });
+}
+
+void executeBatch(const ToolRegistry* ops, const CallContext& context, const QJsonArray& steps, bool continueOnError, const ToolReply& reply)
+{
     struct State {
         QJsonArray steps;
         QJsonArray results;

@@ -62,6 +62,7 @@ QString JobRegistry::start(const QString& tokenId, const QString& tokenName, con
     entry.info.tokenName = tokenName;
     entry.info.title = title;
     entry.info.started = QDateTime::currentDateTimeUtc();
+    entry.info.updated = entry.info.started;
     entry.task = task;
     entry.onSuccess = std::move(onSuccess);
     m_jobs.insert(id, entry);
@@ -71,12 +72,14 @@ QString JobRegistry::start(const QString& tokenId, const QString& tokenName, con
         if (auto it = m_jobs.find(id); it != m_jobs.end()) {
             it->info.progress = current;
             it->info.total = total;
+            it->info.updated = QDateTime::currentDateTimeUtc();
             emit jobChanged(id);
         }
     });
     connect(task.get(), &Task::status, this, [this, id](const QString& status) {
         if (auto it = m_jobs.find(id); it != m_jobs.end()) {
             it->info.status = status;
+            it->info.updated = QDateTime::currentDateTimeUtc();
             emit jobChanged(id);
         }
     });
@@ -100,6 +103,7 @@ void JobRegistry::finish(const QString& id, JobInfo::State state, const QString&
     it->info.state = state;
     it->info.error = error;
     it->info.finished = QDateTime::currentDateTimeUtc();
+    it->info.updated = it->info.finished;
     if (state == JobInfo::State::Succeeded && it->onSuccess) {
         it->info.result = it->onSuccess();
     }

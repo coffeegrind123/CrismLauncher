@@ -5,11 +5,17 @@
 #include <QFile>
 #include <QHostAddress>
 #include <QJsonDocument>
+#include <QJsonArray>
+#include <QRegularExpression>
 #include <QUrl>
+
+#include <utility>
 
 #include <algorithm>
 
+#include "Application.h"
 #include "BuildConfig.h"
+#include "InstanceList.h"
 #include "FileSystem.h"
 #include "mcp/McpCreateTool.h"
 #include "mcp/McpExportOps.h"
@@ -22,6 +28,8 @@
 #include "mcp/McpUpdateOps.h"
 #include "mcp/McpWorldOps.h"
 #include "mcp/McpWriteOps.h"
+#include "minecraft/MinecraftInstance.h"
+#include "minecraft/mod/ModFolderModel.h"
 #include "settings/SettingsObject.h"
 
 namespace {
@@ -35,6 +43,8 @@ constexpr auto TOKENS_FILE = "mcp/tokens.json";
 constexpr auto AUDIT_LOG_FILE = "logs/mcp.log";
 constexpr auto AUTH_REALM = "Bearer realm=\"Crism Launcher MCP\"";
 constexpr qint64 RATE_WINDOW_MS = 60 * 1000;
+constexpr qint64 TASK_TTL_MS = 24 * 60 * 60 * 1000;
+constexpr int TASK_POLL_INTERVAL_MS = 2000;
 
 // Headers a browser-based client (MCP Inspector) sends; listed for CORS preflight
 constexpr auto ALLOWED_REQUEST_HEADERS =
@@ -98,7 +108,13 @@ class HttpExchange : public Mcp::Exchange {
         : m_responder(std::move(responder)), m_sseAllowed(sseAllowed), m_headers(std::move(extraHeaders))
     {
         auto cancelled = m_cancelled;
-        m_responder->onClientGone([cancelled] { *cancelled = true; });
+        auto onCancelled = m_onCancelled;
+        m_responder->onClientGone([cancelled, onCancelled] {
+            *cancelled = true;
+            if (*onCancelled) {
+                (*onCancelled)();
+            }
+        });
     }
 
     void notify(const QJsonObject& notification) override
@@ -129,11 +145,16 @@ class HttpExchange : public Mcp::Exchange {
 
     std::shared_ptr<bool> cancelled() const override { return m_cancelled; }
 
+    bool canStream() const override { return m_sseAllowed; }
+
+    void whenCancelled(std::function<void()> callback) override { *m_onCancelled = std::move(callback); }
+
    private:
     Mcp::Http::ResponderPtr m_responder;
     bool m_sseAllowed;
     Headers m_headers;
     std::shared_ptr<bool> m_cancelled = std::make_shared<bool>(false);
+    std::shared_ptr<std::function<void()>> m_onCancelled = std::make_shared<std::function<void()>>();
 };
 }  // namespace
 
@@ -185,16 +206,32 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
     m_protocol->prepareContext = [this](Mcp::CallContext& context) {
         const auto tokenName = context.token.name;
         const auto clientName = context.clientName;
-        context.confirm = [this, tokenName, clientName](const QString& action, std::function<void(bool, const QString&)> done) {
+        context.confirm = [this, tokenName, clientName](const QStringList& actions, const Mcp::ConfirmAnswer& answer) {
             if (!m_prompter) {
-                done(false, tr("the launcher window is not available to ask the user"));
+                answer(Mcp::ConfirmVerdict::denied(tr("the launcher window is not available to ask the user")));
                 return;
             }
-            m_prompter(McpConfirmRequest{ tokenName, clientName, action },
-                       [done](bool allowed) { done(allowed, allowed ? QString() : tr("the user declined")); });
+            m_prompter(McpConfirmRequest{ tokenName, clientName, actions }, [answer](bool allowed) {
+                answer(allowed ? Mcp::ConfirmVerdict::allowed() : Mcp::ConfirmVerdict::denied(tr("the user declined in the launcher")));
+            });
         };
     };
     connect(&m_jobs, &Mcp::JobRegistry::jobChanged, this, &McpService::activityChanged);
+    connect(&m_jobs, &Mcp::JobRegistry::jobChanged, this, &McpService::taskUpdated);
+
+    // Tasks extension: every job an agent starts is a task it can poll, cancel or subscribe to
+    m_protocol->taskState = [this](const QString& taskId, const QString& tokenId) { return taskState(taskId, tokenId); };
+    m_protocol->taskCancel = [this](const QString& taskId, const QString& tokenId) {
+        const auto job = m_jobs.get(taskId);
+        if (!job || job->tokenId != tokenId) {
+            return false;
+        }
+        m_jobs.cancel(taskId);
+        return true;
+    };
+    m_protocol->listen = [this](const QJsonValue& id, const QJsonObject& filter, const Mcp::TokenInfo& token, const Mcp::ExchangePtr& exchange) {
+        addSubscription(id, filter, token, exchange);
+    };
 
     m_server = new Mcp::Http::Server([this](const auto& request, const auto& responder) { handleHttp(request, responder); }, this);
 
@@ -203,6 +240,14 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
 
 McpService::~McpService()
 {
+    // End open subscriptions gracefully: a result for the listen request, so clients know it was not a dropped connection
+    for (const auto& subscription : std::exchange(m_subscriptions, {})) {
+        const QJsonObject meta{ { Mcp::META_SUBSCRIPTION_ID, subscription.id } };
+        subscription.exchange->finish(200, QJsonObject{ { "jsonrpc", "2.0" },
+                                                        { "id", subscription.id },
+                                                        { "result", QJsonObject{ { "resultType", "complete" }, { "_meta", meta } } } });
+        delete subscription.guard;
+    }
     // The relay must not find a port that no longer answers
     QFile::remove(FS::PathCombine(m_dataRoot, STDIO_FILE));
 }
@@ -456,6 +501,143 @@ void McpService::handleHttp(const Mcp::Http::Request& request, const Mcp::Http::
 
     const bool sseAllowed = !accept.isEmpty() && acceptsType(accept, "text/event-stream");
     m_protocol->handle(incoming, std::make_shared<HttpExchange>(responder, sseAllowed, cors));
+}
+
+std::optional<QJsonObject> McpService::taskState(const QString& taskId, const QString& tokenId) const
+{
+    const auto job = m_jobs.get(taskId);
+    if (!job || job->tokenId != tokenId) {
+        return std::nullopt;
+    }
+    QJsonObject task{
+        { "taskId", job->id },
+        { "createdAt", job->started.toString(Qt::ISODate) },
+        { "lastUpdatedAt", job->updated.toString(Qt::ISODate) },
+        // Finished jobs are kept until newer ones push them out; a day is a safe promise
+        { "ttlMs", TASK_TTL_MS },
+        { "pollIntervalMs", TASK_POLL_INTERVAL_MS },
+    };
+    const auto statusMessage = job->status.isEmpty() ? job->title : job->status;
+    switch (job->state) {
+        case Mcp::JobInfo::State::Running:
+            task["status"] = "working";
+            task["statusMessage"] = statusMessage;
+            break;
+        case Mcp::JobInfo::State::Succeeded:
+            task["status"] = "completed";
+            task["statusMessage"] = job->title;
+            task["result"] = QJsonObject{
+                { "content", QJsonArray{ QJsonObject{ { "type", "text" }, { "text", QString::fromUtf8(jsonBytes(job->result)) } } } },
+                { "structuredContent", job->result },
+                { "isError", false },
+            };
+            break;
+        case Mcp::JobInfo::State::Failed:
+            // A failed job is a tool execution error, which the extension reports as a completed task with isError
+            task["status"] = "completed";
+            task["statusMessage"] = job->error;
+            task["result"] = QJsonObject{
+                { "content", QJsonArray{ QJsonObject{ { "type", "text" }, { "text", job->error } } } },
+                { "structuredContent", QJsonObject{ { "error", job->error } } },
+                { "isError", true },
+            };
+            break;
+        case Mcp::JobInfo::State::Aborted:
+            task["status"] = "cancelled";
+            task["statusMessage"] = job->error;
+            break;
+    }
+    return task;
+}
+
+void McpService::addSubscription(const QJsonValue& id, const QJsonObject& filter, const Mcp::TokenInfo& token, const Mcp::ExchangePtr& exchange)
+{
+    static const QRegularExpression s_instanceUri(R"(^launcher://instances/([^/]+)/(summary|mods)$)");
+
+    Subscription subscription{ id, token.id, {}, {}, exchange, new QObject(this) };
+
+    // Only what can be honored is acknowledged: tool, prompt and resource lists never change, so those are left out
+    for (const auto& value : filter.value("resourceSubscriptions").toArray()) {
+        const auto uri = value.toString();
+        const auto match = s_instanceUri.match(uri);
+        auto* app = APPLICATION_DYN;
+        auto* instance = match.hasMatch() && app ? app->instances()->getInstanceById(QUrl::fromPercentEncoding(match.captured(1).toUtf8())) : nullptr;
+        if (!instance) {
+            continue;
+        }
+        subscription.uris.append(uri);
+        if (match.captured(2) == "summary") {
+            connect(instance, &BaseInstance::runningStatusChanged, subscription.guard, [this, uri] { resourceUpdated(uri); });
+            connect(instance, &BaseInstance::propertiesChanged, subscription.guard, [this, uri] { resourceUpdated(uri); });
+        } else {
+            connect(instance->loaderModList(), &ResourceFolderModel::updateFinished, subscription.guard, [this, uri] { resourceUpdated(uri); });
+        }
+    }
+    for (const auto& value : filter.value("taskIds").toArray()) {
+        const auto job = m_jobs.get(value.toString());
+        if (job && job->tokenId == token.id) {
+            subscription.taskIds.append(job->id);
+        }
+    }
+
+    QJsonObject acknowledged;
+    if (filter.contains("resourceSubscriptions")) {
+        acknowledged["resourceSubscriptions"] = QJsonArray::fromStringList(subscription.uris);
+    }
+    if (filter.contains("taskIds")) {
+        acknowledged["taskIds"] = QJsonArray::fromStringList(subscription.taskIds);
+    }
+    exchange->notify(QJsonObject{ { "jsonrpc", "2.0" },
+                                  { "method", "notifications/subscriptions/acknowledged" },
+                                  { "params", QJsonObject{ { "_meta", QJsonObject{ { Mcp::META_SUBSCRIPTION_ID, id } } }, { "notifications", acknowledged } } } });
+
+    exchange->whenCancelled([this, id, exchange] { removeSubscription(id, exchange); });
+    m_subscriptions.append(subscription);
+
+    // A task that already finished gets its final state right away rather than never
+    for (const auto& taskId : subscription.taskIds) {
+        if (m_jobs.get(taskId)->isFinished()) {
+            taskUpdated(taskId);
+        }
+    }
+}
+
+void McpService::removeSubscription(const QJsonValue& id, const Mcp::ExchangePtr& exchange)
+{
+    for (qsizetype i = 0; i < m_subscriptions.size(); ++i) {
+        if (m_subscriptions[i].id == id && m_subscriptions[i].exchange == exchange) {
+            m_subscriptions[i].guard->deleteLater();
+            m_subscriptions.removeAt(i);
+            return;
+        }
+    }
+}
+
+void McpService::resourceUpdated(const QString& uri)
+{
+    for (const auto& subscription : m_subscriptions) {
+        if (subscription.uris.contains(uri) && !*subscription.exchange->cancelled()) {
+            subscription.exchange->notify(
+                QJsonObject{ { "jsonrpc", "2.0" },
+                             { "method", "notifications/resources/updated" },
+                             { "params", QJsonObject{ { "_meta", QJsonObject{ { Mcp::META_SUBSCRIPTION_ID, subscription.id } } }, { "uri", uri } } } });
+        }
+    }
+}
+
+void McpService::taskUpdated(const QString& taskId)
+{
+    for (const auto& subscription : m_subscriptions) {
+        if (!subscription.taskIds.contains(taskId) || *subscription.exchange->cancelled()) {
+            continue;
+        }
+        auto params = taskState(taskId, subscription.tokenId);
+        if (!params) {
+            continue;
+        }
+        (*params)["_meta"] = QJsonObject{ { Mcp::META_SUBSCRIPTION_ID, subscription.id } };
+        subscription.exchange->notify(QJsonObject{ { "jsonrpc", "2.0" }, { "method", "notifications/tasks" }, { "params", *params } });
+    }
 }
 
 void McpService::recordCall(const Mcp::CallRecord& record)

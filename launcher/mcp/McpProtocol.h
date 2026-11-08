@@ -32,6 +32,9 @@ constexpr int ERROR_INVALID_PARAMS = -32602;
 constexpr int ERROR_INTERNAL = -32603;
 constexpr int ERROR_HEADER_MISMATCH = -32020;
 constexpr int ERROR_UNSUPPORTED_VERSION = -32022;
+constexpr int ERROR_MISSING_CAPABILITY = -32021;
+constexpr auto TASKS_EXTENSION = "io.modelcontextprotocol/tasks";
+constexpr auto META_SUBSCRIPTION_ID = "io.modelcontextprotocol/subscriptionId";
 
 const QStringList& modernVersions();
 const QStringList& legacyVersions();
@@ -61,6 +64,10 @@ class Exchange {
     virtual void accept() = 0;
     virtual void reject(int httpStatus, const QJsonObject& response) = 0;
     virtual std::shared_ptr<bool> cancelled() const = 0;
+    // Whether notify() can deliver anything (HTTP: the client accepts an SSE stream)
+    virtual bool canStream() const { return true; }
+    // Runs `callback` once if the client goes away before the exchange finished (long-lived subscriptions clean up)
+    virtual void whenCancelled(std::function<void()> callback) { Q_UNUSED(callback) }
 };
 using ExchangePtr = std::shared_ptr<Exchange>;
 
@@ -100,6 +107,13 @@ class Protocol {
     // A reason to refuse every call (the user pressed Stop), or nothing
     std::function<std::optional<QString>()> gate;
 
+    // Tasks extension: the DetailedTask (without resultType) for a task this token owns, or nothing
+    std::function<std::optional<QJsonObject>(const QString& taskId, const QString& tokenId)> taskState;
+    // Tasks extension: request cancellation; false when the token owns no such task
+    std::function<bool(const QString& taskId, const QString& tokenId)> taskCancel;
+    // subscriptions/listen: takes over the exchange until the client goes away. `filter` is already checked.
+    std::function<void(const QJsonValue& subscriptionId, const QJsonObject& filter, const TokenInfo& token, const ExchangePtr& exchange)> listen;
+
    private:
     struct Request {
         QJsonValue id;
@@ -108,12 +122,22 @@ class Protocol {
         bool modern = false;
         QString version;
         QString clientName;
+        QJsonObject clientCapabilities;
     };
 
     void dispatch(const Request& request, const Incoming& incoming, const ExchangePtr& exchange);
     void callTool(const Request& request, const Incoming& incoming, const ExchangePtr& exchange);
 
-    QJsonObject result(const Request& request, QJsonObject body) const;
+    QJsonObject result(const Request& request, QJsonObject body, const QString& resultType = QStringLiteral("complete")) const;
+    static bool supportsFormElicitation(const Request& request);
+    static bool supportsTasks(const Request& request);
+    // MRTR confirmation through the agent's client: the verdict from a verified answer, or the question to ask
+    ConfirmVerdict chatConfirm(const Request& request, const QString& tokenId, const QString& tool, const QJsonObject& arguments,
+                               const QStringList& actions) const;
+    QString signState(const QJsonObject& payload) const;
+    std::optional<QJsonObject> verifyState(const QString& state) const;
+    void taskMethod(const Request& request, const Incoming& incoming, const ExchangePtr& exchange);
+    void subscribe(const Request& request, const Incoming& incoming, const ExchangePtr& exchange);
     QJsonObject discoverResult(const Request& request) const;
     QJsonObject initializeResult(const Request& request) const;
     QJsonObject capabilities() const;
@@ -127,6 +151,8 @@ class Protocol {
     const ResourceCatalog* m_resources = nullptr;
     const PromptCatalog* m_prompts = nullptr;
     ServerInfo m_info;
+    // Signs requestState for MRTR; random per process, so a restart invalidates outstanding questions
+    QByteArray m_stateKey;
 };
 
 }  // namespace Mcp

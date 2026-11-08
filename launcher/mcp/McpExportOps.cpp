@@ -129,8 +129,10 @@ void exportOp(const CallContext& context, const QJsonObject& arguments, const To
 
     const auto id = registry->start(context.token.id, context.token.name, QString("Export '%1' as %2").arg(instance->name(), format), task,
                                     [output] { return QJsonObject{ { "file", output } }; });
-    reply(ToolResult::ok(QJsonObject{ { "job", id }, { "file", output } },
-                         QString("Exporting to %1 as job %2; follow it with jobs action=wait.").arg(output, id)));
+    auto result = ToolResult::ok(QJsonObject{ { "job", id }, { "file", output } },
+                                 QString("Exporting to %1 as job %2; follow it with jobs action=wait.").arg(output, id));
+    result.jobId = id;
+    reply(result);
 }
 
 void copyOp(const CallContext& context, const QJsonObject& arguments, const ToolReply& reply)
@@ -175,7 +177,9 @@ void copyOp(const CallContext& context, const QJsonObject& arguments, const Tool
         }
         return QJsonObject{ { "instanceId", *newId } };
     });
-    reply(ToolResult::ok(QJsonObject{ { "job", id } }, QString("Copying as job %1; its result holds the new instance.").arg(id)));
+    auto result = ToolResult::ok(QJsonObject{ { "job", id } }, QString("Copying as job %1; its result holds the new instance.").arg(id));
+    result.jobId = id;
+    reply(result);
 }
 }  // namespace
 

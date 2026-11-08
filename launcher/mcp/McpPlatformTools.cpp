@@ -459,8 +459,10 @@ void startInstall(const CallContext& context,
                                            model->update();
                                            return QJsonObject{ { "instance", instanceId }, { "installed", QJsonArray::fromStringList(files) } };
                                        });
-    reply(ToolResult::ok(QJsonObject{ { "job", jobId }, { "instance", instanceId }, { "plan", planJsonArray }, { "skipped", skipped } },
-                         QString("Installing %1 file(s) as job %2; follow it with jobs action=wait.").arg(plan.size()).arg(jobId)));
+    auto result = ToolResult::ok(QJsonObject{ { "job", jobId }, { "instance", instanceId }, { "plan", planJsonArray }, { "skipped", skipped } },
+                                 QString("Installing %1 file(s) as job %2; follow it with jobs action=wait.").arg(plan.size()).arg(jobId));
+    result.jobId = jobId;
+    reply(result);
 }
 
 void installContent(const CallContext& context, const QJsonObject& arguments, const ToolReply& reply)

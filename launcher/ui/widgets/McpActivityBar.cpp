@@ -87,8 +87,10 @@ void McpActivityBar::prompt(const McpConfirmRequest& request, std::function<void
 {
     const auto who = request.clientName.isEmpty() ? request.tokenName : QString("%1 (%2)").arg(request.tokenName, request.clientName);
 
+    const QString bullet = QString(QChar(0x2022)) + ' ';
+    const auto list = request.actions.size() == 1 ? request.actions.first() : bullet + request.actions.join("\n" + bullet);
     auto* box = new QMessageBox(QMessageBox::Question, tr("Allow AI agent action?"),
-                                tr("The AI agent %1 wants to:\n\n%2\n\nAllow it?").arg(who, request.action), QMessageBox::NoButton, window());
+                                tr("The AI agent %1 wants to:\n\n%2\n\nAllow it?").arg(who, list), QMessageBox::NoButton, window());
     auto* allow = box->addButton(tr("Allow"), QMessageBox::AcceptRole);
     box->addButton(tr("Deny"), QMessageBox::RejectRole);
     box->setAttribute(Qt::WA_DeleteOnClose);

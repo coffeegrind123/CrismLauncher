@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "McpProtocol.h"
 
+#include <QCryptographicHash>
+#include <QDateTime>
 #include <QElapsedTimer>
+#include <QMessageAuthenticationCode>
+#include <QRandomGenerator>
 #include <QJsonArray>
 #include <QJsonDocument>
 
@@ -19,6 +23,11 @@ constexpr auto HEADERLESS_VERSION = "2025-03-26";
 // The tool list is fixed for the life of the process
 constexpr qint64 LIST_TTL_MS = 60 * 60 * 1000;
 constexpr int SUMMARY_MAX_CHARS = 200;
+constexpr auto META_CLIENT_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities";
+// How long a confirmation question stays answerable
+constexpr qint64 CONFIRM_STATE_TTL_MS = 15 * 60 * 1000;
+constexpr int STATE_KEY_BYTES = 32;
+constexpr auto CONFIRM_FIELD = "allow";
 
 QString renderJson(const QJsonValue& value)
 {
@@ -42,7 +51,21 @@ QString summarize(const QJsonObject& arguments)
 
 bool requiresName(const QString& method)
 {
-    return method == "tools/call" || method == "resources/read" || method == "prompts/get";
+    return method == "tools/call" || method == "resources/read" || method == "prompts/get" || method.startsWith("tasks/");
+}
+
+// The body value the Mcp-Name header mirrors
+QString nameFor(const QString& method, const QJsonObject& params)
+{
+    if (method.startsWith("tasks/")) {
+        return params.value("taskId").toString();
+    }
+    return params.contains("uri") ? params.value("uri").toString() : params.value("name").toString();
+}
+
+QByteArray digest(const QJsonObject& object)
+{
+    return QCryptographicHash::hash(QJsonDocument(object).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex();
 }
 }  // namespace
 
@@ -86,7 +109,13 @@ QJsonObject errorResponse(const QJsonValue& id, int code, const QString& message
     return QJsonObject{ { "jsonrpc", "2.0" }, { "id", id.isUndefined() ? QJsonValue() : id }, { "error", error } };
 }
 
-Protocol::Protocol(const ToolRegistry* tools, ServerInfo info) : m_tools(tools), m_info(std::move(info)) {}
+Protocol::Protocol(const ToolRegistry* tools, ServerInfo info) : m_tools(tools), m_info(std::move(info))
+{
+    m_stateKey.resize(STATE_KEY_BYTES);
+    for (auto& byte : m_stateKey) {
+        byte = static_cast<char>(QRandomGenerator::system()->bounded(256));
+    }
+}
 
 int Protocol::errorStatus(const Request& request, int code)
 {
@@ -95,6 +124,7 @@ int Protocol::errorStatus(const Request& request, int code)
         case ERROR_INVALID_REQUEST:
         case ERROR_HEADER_MISMATCH:
         case ERROR_UNSUPPORTED_VERSION:
+        case ERROR_MISSING_CAPABILITY:
             return 400;
         case ERROR_METHOD_NOT_FOUND:
             return request.modern ? 404 : 200;
@@ -150,6 +180,7 @@ void Protocol::handle(const Incoming& incoming, const ExchangePtr& exchange)
         request.modern = true;
         request.version = metaVersion.toString();
         request.clientName = meta.value(META_CLIENT_INFO).toObject().value("name").toString();
+        request.clientCapabilities = meta.value(META_CLIENT_CAPABILITIES).toObject();
 
         if (!incoming.versionHeader) {
             fail(ERROR_HEADER_MISMATCH, "Header mismatch: MCP-Protocol-Version header is required");
@@ -175,8 +206,7 @@ void Protocol::handle(const Incoming& incoming, const ExchangePtr& exchange)
             return;
         }
         if (requiresName(request.method)) {
-            const auto bodyName = request.params.contains("uri") ? request.params.value("uri").toString()
-                                                                  : request.params.value("name").toString();
+            const auto bodyName = nameFor(request.method, request.params);
             if (!incoming.nameHeader) {
                 fail(ERROR_HEADER_MISMATCH, "Header mismatch: Mcp-Name header is required");
                 return;
@@ -278,6 +308,14 @@ void Protocol::dispatch(const Request& request, const Incoming& incoming, const 
         getPrompt(request, incoming, exchange);
         return;
     }
+    if (taskState && (method == "tasks/get" || method == "tasks/update" || method == "tasks/cancel")) {
+        taskMethod(request, incoming, exchange);
+        return;
+    }
+    if (listen && method == "subscriptions/listen") {
+        subscribe(request, incoming, exchange);
+        return;
+    }
 
     exchange->reject(errorStatus(request, ERROR_METHOD_NOT_FOUND),
                      errorResponse(request.id, ERROR_METHOD_NOT_FOUND, QString("Method not found: %1").arg(method)));
@@ -321,12 +359,43 @@ void Protocol::callTool(const Request& request, const Incoming& incoming, const 
     record.tool = name;
     record.summary = summarize(arguments);
 
-    auto reply = [this, request, exchange, timer, replied, record](const ToolResult& toolResult) mutable {
+    const auto tokenId = incoming.token.id;
+    auto reply = [this, request, exchange, timer, replied, record, tokenId](const ToolResult& toolResult) mutable {
         if (*replied) {
             qWarning() << "MCP: tool" << record.tool << "replied twice; the second reply is dropped";
             return;
         }
         *replied = true;
+
+        // The user must answer through the agent's client first: an MRTR InputRequiredResult, not a tool result
+        if (toolResult.inputRequired) {
+            exchange->finish(200, result(request, *toolResult.inputRequired, QStringLiteral("input_required")));
+            record.summary += " (asked the user)";
+            record.durationMs = timer->elapsed();
+            if (onToolCall) {
+                onToolCall(record);
+            }
+            return;
+        }
+
+        // Tasks extension: a call that started a job becomes a task the client polls or subscribes to
+        if (!toolResult.jobId.isEmpty() && supportsTasks(request) && taskState) {
+            if (auto task = taskState(toolResult.jobId, tokenId)) {
+                QJsonObject body;
+                for (const auto* key : { "taskId", "status", "statusMessage", "createdAt", "lastUpdatedAt", "ttlMs", "pollIntervalMs" }) {
+                    if (task->contains(key)) {
+                        body[key] = task->value(key);
+                    }
+                }
+                exchange->finish(200, result(request, body, QStringLiteral("task")));
+                record.summary += " (task " + toolResult.jobId + ")";
+                record.durationMs = timer->elapsed();
+                if (onToolCall) {
+                    onToolCall(record);
+                }
+                return;
+            }
+        }
 
         QJsonArray content;
         const auto text = toolResult.text.isEmpty() ? renderJson(toolResult.structured) : toolResult.text;
@@ -378,6 +447,12 @@ void Protocol::callTool(const Request& request, const Incoming& incoming, const 
     if (prepareContext) {
         prepareContext(context);
     }
+    // Clients that can show a form ask the user themselves (MRTR), unless the user keeps confirmations in the launcher
+    if (supportsFormElicitation(request) && incoming.token.chatConfirmations) {
+        context.confirm = [this, request, tokenId, name, arguments](const QStringList& actions, const ConfirmAnswer& answer) {
+            answer(chatConfirm(request, tokenId, name, arguments, actions));
+        };
+    }
     if (onToolStart) {
         onToolStart(record);
     }
@@ -424,10 +499,10 @@ void Protocol::getPrompt(const Request& request, const Incoming& incoming, const
     exchange->finish(200, result(request, *prompt));
 }
 
-QJsonObject Protocol::result(const Request& request, QJsonObject body) const
+QJsonObject Protocol::result(const Request& request, QJsonObject body, const QString& resultType) const
 {
     if (request.modern) {
-        body["resultType"] = "complete";
+        body["resultType"] = resultType;
         auto meta = body.value("_meta").toObject();
         meta[META_SERVER_INFO] = QJsonObject{ { "name", m_info.name }, { "version", m_info.version } };
         body["_meta"] = meta;
@@ -435,11 +510,160 @@ QJsonObject Protocol::result(const Request& request, QJsonObject body) const
     return QJsonObject{ { "jsonrpc", "2.0" }, { "id", request.id }, { "result", body } };
 }
 
+bool Protocol::supportsFormElicitation(const Request& request)
+{
+    // `elicitation: {}` means form mode; a client that lists modes must list "form"
+    const auto elicitation = request.clientCapabilities.value("elicitation");
+    if (!request.modern || !elicitation.isObject()) {
+        return false;
+    }
+    const auto modes = elicitation.toObject();
+    return modes.isEmpty() || modes.contains("form");
+}
+
+bool Protocol::supportsTasks(const Request& request)
+{
+    return request.modern && request.clientCapabilities.value("extensions").toObject().value(TASKS_EXTENSION).isObject();
+}
+
+QString Protocol::signState(const QJsonObject& payload) const
+{
+    const auto data = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    const auto mac = QMessageAuthenticationCode::hash(data, m_stateKey, QCryptographicHash::Sha256);
+    const auto encoding = QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals;
+    return QString::fromLatin1(data.toBase64(encoding) + '.' + mac.toBase64(encoding));
+}
+
+std::optional<QJsonObject> Protocol::verifyState(const QString& state) const
+{
+    const auto parts = state.toLatin1().split('.');
+    if (parts.size() != 2) {
+        return std::nullopt;
+    }
+    const auto encoding = QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals;
+    const auto data = QByteArray::fromBase64Encoding(parts[0], encoding | QByteArray::AbortOnBase64DecodingErrors);
+    const auto mac = QByteArray::fromBase64Encoding(parts[1], encoding | QByteArray::AbortOnBase64DecodingErrors);
+    if (!data || !mac) {
+        return std::nullopt;
+    }
+    const auto expected = QMessageAuthenticationCode::hash(*data, m_stateKey, QCryptographicHash::Sha256);
+    // Constant time: the comparison must not reveal how much of a forged code was right
+    if (expected.size() != mac->size()) {
+        return std::nullopt;
+    }
+    unsigned char diff = 0;
+    for (qsizetype i = 0; i < expected.size(); ++i) {
+        diff |= static_cast<unsigned char>(expected[i] ^ (*mac)[i]);
+    }
+    if (diff != 0) {
+        return std::nullopt;
+    }
+    return QJsonDocument::fromJson(*data).object();
+}
+
+ConfirmVerdict Protocol::chatConfirm(const Request& request, const QString& tokenId, const QString& tool, const QJsonObject& arguments,
+                                     const QStringList& actions) const
+{
+    // One question per distinct set of actions; the same call retried asks the same question under the same key
+    const auto key = QString("confirm-%1").arg(
+        QString::fromLatin1(QCryptographicHash::hash(actions.join('\n').toUtf8(), QCryptographicHash::Sha256).toHex().left(16)));
+    const auto argumentsDigest = QString::fromLatin1(digest(arguments));
+    const auto now = QDateTime::currentMSecsSinceEpoch();
+
+    if (const auto stateText = request.params.value("requestState").toString(); !stateText.isEmpty()) {
+        const auto state = verifyState(stateText);
+        if (!state) {
+            // A forged or mangled state is refused outright (spec: reject state that fails verification)
+            return ConfirmVerdict::denied("the confirmation could not be verified");
+        }
+        // Bound to this token, this tool, these exact arguments and this question, and only for a while
+        const bool matches = state->value("t").toString() == tokenId && state->value("n").toString() == tool &&
+                             state->value("d").toString() == argumentsDigest && state->value("k").toString() == key &&
+                             state->value("x").toInteger() >= now;
+        const auto response = request.params.value("inputResponses").toObject().value(key).toObject();
+        if (matches && !response.isEmpty()) {
+            const bool allowed = response.value("action").toString() == "accept" && response.value("content").toObject().value(CONFIRM_FIELD).toBool(false);
+            return allowed ? ConfirmVerdict::allowed()
+                           : ConfirmVerdict::denied(QString("the user declined in %1").arg(request.clientName.isEmpty() ? QString("the client") : request.clientName));
+        }
+        // Expired, for other arguments, or unanswered: ask again
+    }
+
+    QString message = actions.size() == 1 ? QString("Allow this change in the Minecraft launcher?\n\n%1").arg(actions.first())
+                                          : QString("Allow these changes in the Minecraft launcher?\n\n- %1").arg(actions.join("\n- "));
+    const QJsonObject elicitation{
+        { "method", "elicitation/create" },
+        { "params", QJsonObject{ { "mode", "form" },
+                                 { "message", message },
+                                 { "requestedSchema",
+                                   QJsonObject{ { "type", "object" },
+                                                { "properties", QJsonObject{ { CONFIRM_FIELD, QJsonObject{ { "type", "boolean" },
+                                                                                                          { "title", "Allow" },
+                                                                                                          { "description", "Allow the change(s) above" },
+                                                                                                          { "default", false } } } } },
+                                                { "required", QJsonArray{ CONFIRM_FIELD } } } } } },
+    };
+    const auto state = signState(QJsonObject{ { "v", 1 },
+                                              { "t", tokenId },
+                                              { "n", tool },
+                                              { "d", argumentsDigest },
+                                              { "k", key },
+                                              { "x", now + CONFIRM_STATE_TTL_MS } });
+    return ConfirmVerdict::needsInput(QJsonObject{ { "inputRequests", QJsonObject{ { key, elicitation } } }, { "requestState", state } });
+}
+
+void Protocol::taskMethod(const Request& request, const Incoming& incoming, const ExchangePtr& exchange)
+{
+    const auto taskId = request.params.value("taskId").toString();
+    const auto task = taskState(taskId, incoming.token.id);
+    if (!task) {
+        exchange->reject(errorStatus(request, ERROR_INVALID_PARAMS),
+                         errorResponse(request.id, ERROR_INVALID_PARAMS, QString("Unknown task: %1").arg(taskId)));
+        return;
+    }
+    if (request.method == "tasks/get") {
+        exchange->finish(200, result(request, *task));
+        return;
+    }
+    if (request.method == "tasks/cancel" && taskCancel) {
+        taskCancel(taskId, incoming.token.id);
+    }
+    // tasks/update: this server never puts a task in input_required (confirmations finish before the task starts), so
+    // every response is for a key that is not outstanding and is ignored, as the extension specifies
+    exchange->finish(200, result(request, {}));
+}
+
+void Protocol::subscribe(const Request& request, const Incoming& incoming, const ExchangePtr& exchange)
+{
+    if (!incoming.token.scopes.testFlag(Scope::Read)) {
+        exchange->reject(errorStatus(request, ERROR_INVALID_REQUEST),
+                         errorResponse(request.id, ERROR_INVALID_REQUEST, "Subscriptions need the 'read' scope"));
+        return;
+    }
+    const auto filter = request.params.value("notifications").toObject();
+    if (filter.contains("taskIds") && !supportsTasks(request)) {
+        exchange->reject(errorStatus(request, ERROR_MISSING_CAPABILITY),
+                         errorResponse(request.id, ERROR_MISSING_CAPABILITY, "Missing required client capability",
+                                       QJsonObject{ { "requiredCapabilities",
+                                                      QJsonObject{ { "extensions", QJsonObject{ { TASKS_EXTENSION, QJsonObject{} } } } } } }));
+        return;
+    }
+    if (!exchange->canStream()) {
+        exchange->reject(errorStatus(request, ERROR_INVALID_REQUEST),
+                         errorResponse(request.id, ERROR_INVALID_REQUEST, "subscriptions/listen needs an SSE response (Accept: text/event-stream)"));
+        return;
+    }
+    listen(request.id, filter, incoming.token, exchange);
+}
+
 QJsonObject Protocol::capabilities() const
 {
     QJsonObject out{ { "tools", QJsonObject{ { "listChanged", false } } } };
     if (m_resources) {
-        out["resources"] = QJsonObject{ { "listChanged", false }, { "subscribe", false } };
+        out["resources"] = QJsonObject{ { "listChanged", false }, { "subscribe", static_cast<bool>(listen) } };
+    }
+    if (taskState) {
+        out["extensions"] = QJsonObject{ { TASKS_EXTENSION, QJsonObject{} } };
     }
     if (m_prompts) {
         out["prompts"] = QJsonObject{ { "listChanged", false } };
