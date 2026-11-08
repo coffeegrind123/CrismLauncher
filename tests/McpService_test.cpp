@@ -175,6 +175,14 @@ class McpServiceTest : public QObject {
         QCOMPARE(send(post(legacyInitialize(), {}, true, "evil.example:80")).status, 403);
     }
 
+    void dockerHostNames()
+    {
+        // An agent in a Docker container reaches the host's loopback through these names
+        QCOMPARE(send(post(legacyInitialize(), {}, true, "host.docker.internal:1234")).status, 200);
+        QCOMPARE(send(post(legacyInitialize(), {}, true, "gateway.docker.internal")).status, 200);
+        QCOMPARE(send(post(legacyInitialize(), {}, true, "docker.internal.evil.example")).status, 403);
+    }
+
     void origins()
     {
         QCOMPARE(send(post(legacyInitialize(), { "Origin: https://evil.example" })).status, 403);

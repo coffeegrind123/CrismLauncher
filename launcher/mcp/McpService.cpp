@@ -57,6 +57,11 @@ bool isLoopbackHostName(const QString& host)
     if (host.compare("localhost", Qt::CaseInsensitive) == 0) {
         return true;
     }
+    // Docker Desktop's names for the host machine: an agent in a container reaches the launcher through them, and the
+    // connection still arrives over loopback. A DNS-rebinding page cannot make a browser send these names.
+    if (host.compare("host.docker.internal", Qt::CaseInsensitive) == 0 || host.compare("gateway.docker.internal", Qt::CaseInsensitive) == 0) {
+        return true;
+    }
     const QHostAddress address(host);
     return !address.isNull() && address.isLoopback();
 }

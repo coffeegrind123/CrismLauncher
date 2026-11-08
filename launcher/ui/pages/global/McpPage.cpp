@@ -413,7 +413,8 @@ void McpPage::revokeToken()
 void McpPage::showSecret(const QString& name, const QString& secret)
 {
     auto* service = APPLICATION->mcp();
-    const auto url = service->endpointUrl();
+    // The port is chosen the first time the endpoint starts; until then there is no address to hand out
+    const auto url = service->port() == 0 ? QString("http://127.0.0.1:PORT/mcp") : service->endpointUrl();
     const auto header = QString("Bearer %1").arg(secret);
 
     const auto claudeCode =
@@ -459,7 +460,10 @@ void McpPage::showSecret(const QString& name, const QString& secret)
     addCopyRow(tr("Cursor and other clients that read an \"mcpServers\" JSON config (VS Code names the key \"servers\"):"), clientJson, true);
 
     if (!service->isListening()) {
-        auto* note = new QLabel(tr("The endpoint is off. Enable it on this page and apply before connecting."), &dialog);
+        auto* note = new QLabel(service->port() == 0 ? tr("The endpoint is off, so it has no port yet: enable it on this page and apply, "
+                                                         "then replace PORT with the port shown there.")
+                                                      : tr("The endpoint is off. Enable it on this page and apply before connecting."),
+                                &dialog);
         note->setWordWrap(true);
         layout->addWidget(note);
     }
