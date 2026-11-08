@@ -28,7 +28,8 @@ enum class ContentKind { Mods, ResourcePacks, TexturePacks, ShaderPacks, DataPac
 const QStringList& contentKindNames();
 std::optional<ContentKind> contentKindFromName(const QString& name);
 QString contentKindName(ContentKind kind);
-ResourceFolderModel* contentModel(MinecraftInstance* instance, ContentKind kind);
+// The instance's folder model for `kind`; an error when the instance has none (data packs need "global data packs" on)
+Result<ResourceFolderModel*> contentModel(MinecraftInstance* instance, ContentKind kind);
 
 // Runs `done` once `model` has rescanned its folder and finished parsing file metadata (names, versions), or after a
 // timeout so a stuck parse never hangs a call

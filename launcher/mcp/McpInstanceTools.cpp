@@ -127,7 +127,16 @@ void instanceGet(const CallContext&, const QJsonObject& arguments, const ToolRep
     state->out = out;
     state->pending = static_cast<int>(contentKindNames().size());
     for (const auto& name : contentKindNames()) {
-        auto* model = contentModel(instance, *contentKindFromName(name));
+        auto modelResult = contentModel(instance, *contentKindFromName(name));
+        if (!modelResult) {
+            state->counts[name] = QJsonObject{ { "available", false }, { "reason", modelResult.error() } };
+            if (--state->pending == 0) {
+                state->out["content"] = state->counts;
+                reply(ToolResult::ok(state->out));
+            }
+            continue;
+        }
+        auto* model = *modelResult;
         whenModelReady(model, [state, model, name, reply] {
             int enabled = 0;
             for (int i = 0; i < model->size(); ++i) {
@@ -300,7 +309,12 @@ void contentList(const CallContext&, const QJsonObject& arguments, const ToolRep
     const auto query = arguments.value("query").toString();
     const auto enabledFilter = arguments.value("enabled");
     const int limit = arguments.value("limit").toInt(DEFAULT_CONTENT_LIMIT);
-    auto* model = contentModel(instance, *contentKindFromName(kindName));
+    auto modelResult = contentModel(instance, *contentKindFromName(kindName));
+    if (!modelResult) {
+        reply(ToolResult::error(modelResult.error()));
+        return;
+    }
+    auto* model = *modelResult;
 
     whenModelReady(model, [model, instance, kindName, query, enabledFilter, limit, reply] {
         QJsonArray out;

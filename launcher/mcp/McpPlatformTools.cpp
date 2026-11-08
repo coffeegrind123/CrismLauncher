@@ -497,7 +497,12 @@ void installContent(const CallContext& context, const QJsonObject& arguments, co
         TRY_OR_LOG(instance->getPackProfile()->reload(Net::Mode::Offline))
     }
 
-    auto* model = contentModel(instance, kind);
+    auto modelResult = contentModel(instance, kind);
+    if (!modelResult) {
+        reply(ToolResult::error(modelResult.error()));
+        return;
+    }
+    auto* model = *modelResult;
     whenModelReady(model, [context, instance, model, kind, type, requests, withDependencies, dryRun, reply] {
         struct State {
             int pending = 0;

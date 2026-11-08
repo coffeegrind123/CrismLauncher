@@ -314,7 +314,12 @@ void contentToggle(const QJsonObject& arguments, const ToolReply& reply, EnableA
     }
     const auto kindName = arguments.value("kind").toString("mods");
     const auto kind = *contentKindFromName(kindName);
-    auto* model = contentModel(instance, kind);
+    auto modelResult = contentModel(instance, kind);
+    if (!modelResult) {
+        reply(ToolResult::error(modelResult.error()));
+        return;
+    }
+    auto* model = *modelResult;
     const bool withDependencies = arguments.value("withDependencies").toBool(true);
     const auto files = arguments.value("files").toArray();
 
@@ -353,7 +358,12 @@ void contentRemove(const CallContext&, const QJsonObject& arguments, const ToolR
     if (!instance) {
         return;
     }
-    auto* model = contentModel(instance, *contentKindFromName(arguments.value("kind").toString("mods")));
+    auto modelResult = contentModel(instance, *contentKindFromName(arguments.value("kind").toString("mods")));
+    if (!modelResult) {
+        reply(ToolResult::error(modelResult.error()));
+        return;
+    }
+    auto* model = *modelResult;
     const auto files = arguments.value("files").toArray();
     whenModelReady(model, [model, files, reply, instance] {
         auto rows = rowsFor(model, files);

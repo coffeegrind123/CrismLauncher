@@ -73,21 +73,33 @@ QString contentKindName(ContentKind kind)
     return contentKindNames().value(static_cast<int>(kind));
 }
 
-ResourceFolderModel* contentModel(MinecraftInstance* instance, ContentKind kind)
+Result<ResourceFolderModel*> contentModel(MinecraftInstance* instance, ContentKind kind)
 {
+    ResourceFolderModel* model = nullptr;
     switch (kind) {
         case ContentKind::Mods:
-            return instance->loaderModList();
+            model = instance->loaderModList();
+            break;
         case ContentKind::ResourcePacks:
-            return instance->resourcePackList();
+            model = instance->resourcePackList();
+            break;
         case ContentKind::TexturePacks:
-            return instance->texturePackList();
+            model = instance->texturePackList();
+            break;
         case ContentKind::ShaderPacks:
-            return instance->shaderPackList();
+            model = instance->shaderPackList();
+            break;
         case ContentKind::DataPacks:
-            return instance->dataPackList();
+            model = instance->dataPackList();
+            break;
     }
-    return nullptr;
+    if (!model) {
+        if (kind == ContentKind::DataPacks) {
+            return std::unexpected(QString("Data packs are off for '%1': its setting GlobalDataPacksEnabled is false.").arg(instance->name()));
+        }
+        return std::unexpected(QString("'%1' has no folder for that content kind.").arg(instance->name()));
+    }
+    return model;
 }
 
 void whenModelReady(ResourceFolderModel* model, std::function<void()> done)

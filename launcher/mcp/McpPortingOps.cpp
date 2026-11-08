@@ -355,7 +355,12 @@ void analyzeOp(const CallContext&, const QJsonObject& arguments, const ToolReply
             reply(ToolResult::error(found.error()));
             return;
         }
-        auto* model = contentModel(*found, *contentKindFromName(arguments.value("kind").toString("mods")));
+        auto modelResult = contentModel(*found, *contentKindFromName(arguments.value("kind").toString("mods")));
+        if (!modelResult) {
+            reply(ToolResult::error(modelResult.error()));
+            return;
+        }
+        auto* model = *modelResult;
         const auto path = model->dir().absoluteFilePath(arguments.value("file").toString());
         if (arguments.value("file").toString().contains('/') || !QFileInfo(path).isFile()) {
             reply(ToolResult::error("No such file in that folder.", "content.list gives the file names."));
@@ -467,7 +472,12 @@ void installUrlOp(const CallContext& context, const QJsonObject& arguments, cons
         reply(ToolResult::error("Could not tell the file name from the URL; pass fileName."));
         return;
     }
-    auto* model = contentModel(instance, *contentKindFromName(arguments.value("kind").toString("mods")));
+    auto modelResult = contentModel(instance, *contentKindFromName(arguments.value("kind").toString("mods")));
+    if (!modelResult) {
+        reply(ToolResult::error(modelResult.error()));
+        return;
+    }
+    auto* model = *modelResult;
     const auto path = model->dir().absoluteFilePath(fileName);
     auto* registry = jobs();
     if (!registry) {

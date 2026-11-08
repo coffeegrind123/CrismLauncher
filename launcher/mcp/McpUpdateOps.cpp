@@ -219,7 +219,12 @@ void checkUpdatesOp(const CallContext&, const QJsonObject& arguments, const Tool
         reply(ToolResult::error(found.error()));
         return;
     }
-    auto* model = contentModel(*found, *contentKindFromName(arguments.value("kind").toString("mods")));
+    auto modelResult = contentModel(*found, *contentKindFromName(arguments.value("kind").toString("mods")));
+    if (!modelResult) {
+        reply(ToolResult::error(modelResult.error()));
+        return;
+    }
+    auto* model = *modelResult;
     checkForUpdates(*found, model, fileFilter(arguments), arguments.value("findMetadata").toBool(true), [reply](Result<CheckPtr> result) {
         if (!result) {
             reply(ToolResult::error(QString("Checking for updates failed: %1").arg(result.error())));
@@ -241,7 +246,12 @@ void updateOp(const CallContext& context, const QJsonObject& arguments, const To
         reply(ToolResult::error(QString("'%1' is running; replacing its files now could crash the game.").arg(instance->name())));
         return;
     }
-    auto* model = contentModel(instance, *contentKindFromName(arguments.value("kind").toString("mods")));
+    auto modelResult = contentModel(instance, *contentKindFromName(arguments.value("kind").toString("mods")));
+    if (!modelResult) {
+        reply(ToolResult::error(modelResult.error()));
+        return;
+    }
+    auto* model = *modelResult;
     const bool withDependencies = arguments.value("dependencies").toString("required") == "required";
 
     checkForUpdates(instance, model, fileFilter(arguments), true, [context, instance, model, withDependencies, reply](Result<CheckPtr> result) {
