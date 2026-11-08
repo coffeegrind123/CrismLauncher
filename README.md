@@ -25,15 +25,6 @@
 - Offline accounts work without owning Minecraft or adding a Microsoft account, and game files download without any account
 - authlib-injector accounts: log in to Ely.by, LittleSkin, Blessing Skin, Drasl or any Yggdrasil-compatible server (Accounts → Add authlib-injector). The agent is downloaded, verified and injected automatically, and skins can be changed where the server allows it. Fjord Launcher account files load as-is
 
-**Mod downloads (CurseForge tab)**
-- Modpacks and mods whose authors disabled third-party downloads appear and install in the CurseForge tab too, instead of showing "No version available"
-
-**AI agents (MCP)**
-- Optional (Settings → AI agents (MCP), off by default): an [MCP](https://modelcontextprotocol.io) endpoint on `127.0.0.1` lets AI agents such as Claude Code, Cursor or Claude Desktop manage the launcher: list and create instances, search Modrinth and CurseForge and install mods with their dependencies, update mods and modpacks, change settings, launch the game and read its logs and crash reports, manage worlds, servers, screenshots, accounts and Java
-- Each agent gets its own token with chosen permissions (read, instances, content, launch, settings, accounts, files). By default the launcher asks you before destructive changes, a status-bar strip shows what agents are doing, and Stop cancels them
-- Agents never see account tokens, API keys or passwords, and settings that could run programs or redirect downloads stay yours to change
-- Claude Code: `claude mcp add --transport http crism-launcher http://127.0.0.1:<port>/mcp --header "Authorization: Bearer <token>"` (the settings page shows the exact command when you create a token). Claude Desktop and other clients that start a command: enable stdio clients on the same page and paste the copied config
-
 **Download mirror**
 - Optional (Settings → Services): fetch Minecraft, libraries, assets, Java, Forge and NeoForge from BMCLAPI or a compatible mirror, falling back to the official servers on any failure. Mirrored files are verified against the official checksums
 
@@ -48,12 +39,12 @@
 
 | Platform | Download |
 |----------|----------|
-| **Windows x64** | [CrismLauncher-Windows-MinGW-w64-Portable-12.0.47.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.47/CrismLauncher-Windows-MinGW-w64-Portable-12.0.47.zip)<br/>[CrismLauncher-Windows-MinGW-w64-Setup-12.0.47.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.47/CrismLauncher-Windows-MinGW-w64-Setup-12.0.47.exe) |
-| **Windows ARM64** | [CrismLauncher-Windows-MSVC-arm64-Portable-12.0.47.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.47/CrismLauncher-Windows-MSVC-arm64-Portable-12.0.47.zip)<br/>[CrismLauncher-Windows-MSVC-arm64-Setup-12.0.47.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.47/CrismLauncher-Windows-MSVC-arm64-Setup-12.0.47.exe) |
-| **macOS** | [CrismLauncher-macOS-12.0.47.dmg](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.47/CrismLauncher-macOS-12.0.47.dmg)<br/>[CrismLauncher-macOS-12.0.47.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.47/CrismLauncher-macOS-12.0.47.zip) |
-| **Linux x86_64** | [CrismLauncher-Linux-Qt6-Portable-12.0.47.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.47/CrismLauncher-Linux-Qt6-Portable-12.0.47.tar.gz)<br/>[CrismLauncher-Linux-x86_64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.47/CrismLauncher-Linux-x86_64.AppImage) |
-| **Linux ARM64** | [CrismLauncher-Linux-aarch64-Qt6-Portable-12.0.47.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.47/CrismLauncher-Linux-aarch64-Qt6-Portable-12.0.47.tar.gz)<br/>[CrismLauncher-Linux-aarch64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.47/CrismLauncher-Linux-aarch64.AppImage) |
+| **Windows x64** | [CrismLauncher-Windows-MinGW-w64-Portable-12.0.54.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.54/CrismLauncher-Windows-MinGW-w64-Portable-12.0.54.zip)<br/>[CrismLauncher-Windows-MinGW-w64-Setup-12.0.54.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.54/CrismLauncher-Windows-MinGW-w64-Setup-12.0.54.exe) |
+| **Windows ARM64** | [CrismLauncher-Windows-MSVC-arm64-Portable-12.0.54.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.54/CrismLauncher-Windows-MSVC-arm64-Portable-12.0.54.zip)<br/>[CrismLauncher-Windows-MSVC-arm64-Setup-12.0.54.exe](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.54/CrismLauncher-Windows-MSVC-arm64-Setup-12.0.54.exe) |
+| **macOS** | [CrismLauncher-macOS-12.0.54.dmg](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.54/CrismLauncher-macOS-12.0.54.dmg)<br/>[CrismLauncher-macOS-12.0.54.zip](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.54/CrismLauncher-macOS-12.0.54.zip) |
+| **Linux x86_64** | [CrismLauncher-Linux-Qt6-Portable-12.0.54.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.54/CrismLauncher-Linux-Qt6-Portable-12.0.54.tar.gz)<br/>[CrismLauncher-Linux-x86_64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.54/CrismLauncher-Linux-x86_64.AppImage) |
+| **Linux ARM64** | [CrismLauncher-Linux-aarch64-Qt6-Portable-12.0.54.tar.gz](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.54/CrismLauncher-Linux-aarch64-Qt6-Portable-12.0.54.tar.gz)<br/>[CrismLauncher-Linux-aarch64.AppImage](https://github.com/coffeegrind123/CrismLauncher/releases/download/12.0.54/CrismLauncher-Linux-aarch64.AppImage) |
 
 ---
 
-*Last updated: 2026-11-07 21:38 UTC*
+*Last updated: 2026-11-08 04:02 UTC*
