@@ -828,7 +828,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_settings->registerSetting({ "PostExitCommand", "PostExitCmd" }, "");
 
         // The cat
-        m_settings->registerSetting("EnableCat", true);
+        m_settings->registerSetting("EnableCat", false);
         m_settings->registerSetting("TheCat", false);
         m_settings->registerSetting("CatOpacity", 100);
         m_settings->registerSetting("CatFit", "fit");
@@ -1320,27 +1320,12 @@ bool Application::createSetupWizard()
     bool wizardRequired =
         javaRequired || languageRequired || pasteInterventionRequired || themeInterventionRequired || askjava || login || askMirrors;
     if (wizardRequired) {
-        const bool darkMode = QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
         // set default theme after going into theme wizard
         if (!validIcons) {
-            QString defaultIconTheme;
-            if (QApplication::style()->name() == "breeze") {
-                defaultIconTheme = darkMode ? "breeze_dark" : "breeze_light";
-            } else {
-                defaultIconTheme = darkMode ? "flat_white" : "flat";
-            }
-
-            settings()->set("IconTheme", defaultIconTheme);
+            settings()->set("IconTheme", QStringLiteral("pe_blue"));  // "Simple (Blue)"
         }
         if (!validWidgets) {
-#if defined(Q_OS_LINUX)
-            const QString style = "system";
-#else
-            const QString style = darkMode ? QStringLiteral("dark") : QStringLiteral("bright");
-
-#endif
-
-            settings()->set("ApplicationTheme", style);
+            settings()->set("ApplicationTheme", QStringLiteral("system"));
         }
 
         m_themeManager->applyCurrentlySelectedTheme(true);
