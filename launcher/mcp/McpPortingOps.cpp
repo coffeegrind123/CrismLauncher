@@ -240,10 +240,10 @@ Result<QJsonObject> analyzeJar(const QString& path)
             TRY_INTO(const auto bytes, file->readAll())
             const auto text = QString::fromUtf8(bytes);
             metadata["loader"] = name.contains("neoforge") ? "neoforge" : "forge";
-            metadata["modId"] = firstMatch(text, QRegularExpression(R"(modId\s*=\s*"([^"]+)")"));
-            metadata["version"] = firstMatch(text, QRegularExpression(R"(\n\s*version\s*=\s*"([^"]+)")"));
-            metadata["license"] = firstMatch(text, QRegularExpression(R"(license\s*=\s*"([^"]*)")"));
-            metadata["minecraft"] = firstMatch(text, QRegularExpression(R"(modId\s*=\s*"minecraft"[\s\S]*?versionRange\s*=\s*"([^"]*)")"));
+            metadata["modId"] = firstMatch(text, QRegularExpression(R"re(modId\s*=\s*"([^"]+)")re"));
+            metadata["version"] = firstMatch(text, QRegularExpression(R"re(\n\s*version\s*=\s*"([^"]+)")re"));
+            metadata["license"] = firstMatch(text, QRegularExpression(R"re(license\s*=\s*"([^"]*)")re"));
+            metadata["minecraft"] = firstMatch(text, QRegularExpression(R"re(modId\s*=\s*"minecraft"[\s\S]*?versionRange\s*=\s*"([^"]*)")re"));
             return {};
         }
         if (name == "fabric.mod.json" || name == "quilt.mod.json") {
