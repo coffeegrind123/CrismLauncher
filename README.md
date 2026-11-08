@@ -28,6 +28,12 @@
 **Download mirror**
 - Optional (Settings → Services): fetch Minecraft, libraries, assets, Java, Forge and NeoForge from BMCLAPI or a compatible mirror, falling back to the official servers on any failure. Mirrored files are verified against the official checksums
 
+**AI agents (MCP)**
+- Optional (Settings → AI agents (MCP), off by default): a [Model Context Protocol](https://modelcontextprotocol.io) server that lets Claude Code, Cursor, VS Code, Codex and other agents manage the launcher. It listens on `127.0.0.1` only and needs a bearer token; the settings page creates tokens and shows ready-made configs, e.g. `claude mcp add --transport http launcher http://127.0.0.1:<port>/mcp --header "Authorization: Bearer <token>"`
+- Agents can list and inspect instances; search Modrinth and CurseForge and install mods, modpacks, resource packs, shaders and data packs with their dependencies; create, copy, export and update instances; change components, Java and settings; launch and stop the game and read its logs and crash reports; manage worlds, servers, screenshots and accounts; and take a screenshot of the launcher window. About 50 operations sit behind `search_ops` / `call` / `batch`
+- Each token has scopes (`read`, `instances`, `content`, `launch`, `settings`, `accounts`, `files`, `commands`) and a confirmation policy. Destructive actions are confirmed in the launcher window or in the agent's chat, and a bar in the main window shows what the agent is doing, with a Stop button. Account tokens and other secrets are never returned, and every call is logged
+- Optional extras: a `--mcp-stdio` relay for stdio-only clients such as Claude Desktop, shell commands (`system.run`, behind its own off-by-default switch and scope), and mod-porting help (`porting.analyze`, a porting guide and `content.install_url` for installing a self-built jar into one instance). Agents running in Docker reach the launcher at `host.docker.internal`
+
 **Updates**
 - The built-in updater (Sparkle on macOS) follows this fork's releases, not upstream Prism's
 
