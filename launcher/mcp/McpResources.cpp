@@ -105,6 +105,67 @@ The launcher picks a matching Java automatically when `AutomaticJava` is on. `ca
 installed. An instance can be pinned to one with the settings tool (target = the instance): `OverrideJavaLocation`
 = true and `JavaPath`, but `JavaPath` is a sensitive setting only the user may change.
 )") },
+        { "mod-porting", QStringLiteral(R"(# Porting a mod to another Minecraft version or loader
+
+## Terms (read first; they apply to every port)
+
+- The port stays private: a private GitHub repo used only for CI builds, nothing published.
+- The jar goes only into your instance.
+- If the author ships a build for the target version, use theirs.
+
+Only port for the user's own play, at their request. Never upload a ported jar to Modrinth, CurseForge or a public
+repository, and never share the decompiled source.
+
+## 1. Check that a port is needed
+
+- `content_versions` for the mod, filtered to the target `minecraft` and `loader`: an official build ends the job.
+- Look for an existing port or fork under another name with `search_content`.
+
+## 2. Measure it
+
+`call porting.analyze` with platform + projectId (or instance + file) and `targetMinecraft`. It reports the licence,
+whether source is published, the Java release, mixin targets, which game packages the classes use, how many classes
+touch rendering, and the NeoForge primers between the two versions. Tell the user the effort rating before starting:
+a "large" port (mostly rendering or mixins) is a rewrite and can take weeks.
+
+## 3. Get the source
+
+- Published source (`sourceUrl`): clone it with `gh repo clone`, check out the tag closest to the version you start from.
+- No source: decompile the jar `porting.analyze` cached (`cachedJar`) with Vineflower
+  (https://github.com/Vineflower/vineflower/releases):
+  `java -jar vineflower.jar -dgs=1 mod.jar src/`. Modern NeoForge and Fabric jars use Mojang's names at runtime, so the
+  output reads like source; resources (assets, shaders, mixin configs, mods.toml) come straight from the jar.
+
+## 4. Set up the target project
+
+- NeoForge: the MDK for the target version from https://github.com/NeoForgeMDKs (e.g. `MDK-1.21.1-ModDevGradle`).
+- Fabric: https://github.com/FabricMC/fabric-example-mod at the branch for the target version.
+- Java: 1.20.5-1.21.x need Java 21; 26.x needs Java 25.
+- Parchment mappings (https://github.com/ParchmentMC/Parchment) add parameter names.
+
+## 5. Port
+
+Read the primers between the two versions (https://github.com/neoforged/.github/tree/main/primers, one per version step;
+`porting.analyze` lists them). Each covers vanilla changes and the loader's changes. For a backport read them newest
+first and apply each change in reverse. Port data and logic first, then rendering, then mixins: every mixin target and
+injection point must be found again in the target version's classes.
+
+## 6. Build in CI, privately
+
+- `gh repo create <name> --private`, push, and add a GitHub Actions workflow: `actions/setup-java` with the right JDK,
+  then `./gradlew build`.
+- Publish the jar as a release asset of that private repo (`gh release create`), never as a public download.
+- Nothing is compiled on the agent's own machine unless the user says so; if they turned on "Allow agents to run
+  commands", `system.run` can run Gradle on their computer instead.
+
+## 7. Install and test
+
+- `call content.install_url` with the release asset's API URL
+  (`https://api.github.com/repos/<owner>/<repo>/releases/assets/<id>`) and `authorization` = `Bearer <token>`.
+- `launch` the instance, then `logs source=game minLevel=error` and `logs source=crash`; `window.screenshot` and
+  `screenshots.get` show visual results. Fix, rebuild, reinstall, repeat.
+- When the author releases an official build for the target version, remove the port and install theirs.
+)") },
         { "performance", QStringLiteral(R"(# Performance
 
 - Fabric/Quilt: Sodium (rendering), Lithium (game logic), FerriteCore (memory), ImmediatelyFast, Entity Culling.
@@ -266,7 +327,7 @@ void registerLauncherResources(ResourceCatalog& catalog, const ToolRegistry* too
                             reply, [](const ToolResult& result) { return result.structured.toObject().value("text").toString(); });
                 });
 
-    catalog.add({ "launcher://guide/{topic}", "guide", "Guides", "modpack-building, crash-triage, java-versions, performance.", MARKDOWN },
+    catalog.add({ "launcher://guide/{topic}", "guide", "Guides", "modpack-building, crash-triage, java-versions, performance, mod-porting.", MARKDOWN },
                 [](const QString& uri, const QStringList& captures, const ResourceReply& reply) {
                     const auto topic = captures.value(0);
                     if (!guides().contains(topic)) {
@@ -331,6 +392,18 @@ void registerLauncherPrompts(PromptCatalog& catalog)
                                      "(instance_get, content.list), add compatible performance mods with install_content, and set a "
                                      "sensible memory limit with the settings tool. Explain each change.")
                           .arg(a.value("instance").toString());
+                  } });
+    catalog.add({ "port_mod",
+                  "Port a mod",
+                  "Port a mod to the Minecraft version and loader of an instance, for the user's own play.",
+                  { { "instance", "Instance id the port is for", true },
+                    { "platform", "modrinth or curseforge", true },
+                    { "projectId", "The mod's project id", true } },
+                  [](const QJsonObject& a) {
+                      return QString("Port the %1 mod %2 so it runs in instance %3. Read launcher://guide/mod-porting first and keep to "
+                                     "its terms. Check for an official build, run porting.analyze with the instance's Minecraft "
+                                     "version as targetMinecraft, and tell me the effort rating before starting the port.")
+                          .arg(a.value("platform").toString(), a.value("projectId").toString(), a.value("instance").toString());
                   } });
 }
 

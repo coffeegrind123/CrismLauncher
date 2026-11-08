@@ -26,6 +26,7 @@
 #include "mcp/McpJavaOps.h"
 #include "mcp/McpLauncherTools.h"
 #include "mcp/McpOps.h"
+#include "mcp/McpPortingOps.h"
 #include "mcp/McpUpdateOps.h"
 #include "mcp/McpWorldOps.h"
 #include "mcp/McpWriteOps.h"
@@ -182,6 +183,7 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
     Mcp::registerPackOps(m_ops);
     Mcp::registerJavaOps(m_ops);
     Mcp::registerCommandOps(m_ops);
+    Mcp::registerPortingOps(m_ops);
     Mcp::registerOpTools(m_tools, &m_ops);
 
     Mcp::ServerInfo info;

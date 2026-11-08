@@ -617,6 +617,8 @@ set(MCP_SOURCES
     mcp/McpOps.h
     mcp/McpPlatformTools.cpp
     mcp/McpPlatformTools.h
+    mcp/McpPortingOps.cpp
+    mcp/McpPortingOps.h
     mcp/McpProtocol.cpp
     mcp/McpProtocol.h
     mcp/McpSchema.cpp
