@@ -238,7 +238,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
 
         ui->actionCheckUpdate->setVisible(APPLICATION->updaterEnabled());
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
         ui->actionAddToPATH->setVisible(false);
 #endif
 
@@ -436,7 +436,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 // macOS always has a native menu bar, so these fixes are not applicable
 // Other systems may or may not have a native menu bar (most do not - it seems like only Ubuntu Unity does)
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
 void MainWindow::keyReleaseEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Alt && !APPLICATION->settings()->get("MenuBarInsteadOfToolBar").toBool())
@@ -579,6 +579,16 @@ void MainWindow::showInstanceContextMenu(const QPoint& pos)
             auto* actionRenameGroup = new QAction(tr("&Rename group"), menu);
             connect(actionRenameGroup, &QAction::triggered, this, [this, group] { renameGroup(group); });
             actions.append(actionRenameGroup);
+
+            QAction* actionChangeGroupIcon = new QAction(tr("Change group &icon"), this);
+            connect(actionChangeGroupIcon, &QAction::triggered, this, [this, group] { setGroupIcon(group); });
+            actions.append(actionChangeGroupIcon);
+
+            if (!APPLICATION->instances()->getGroupIconKey(group).isEmpty()) {
+                QAction* actionRemoveGroupIcon = new QAction(tr("Delete &group icon"), this);
+                connect(actionRemoveGroupIcon, &QAction::triggered, this, [this, group] { removeGroupIcon(group); });
+                actions.append(actionRemoveGroupIcon);
+            }
         }
     }
     menu->addActions(actions);
@@ -1274,6 +1284,32 @@ void MainWindow::deleteGroup(QString group)
         APPLICATION->instances()->deleteGroup(group);
 }
 
+void MainWindow::setGroupIcon(QString group)
+{
+    Q_ASSERT(!group.isEmpty());
+
+    InstanceList* instances = APPLICATION->instances();
+
+    IconPickerDialog dlg(this);
+    dlg.execWithSelection(instances->getGroupIconKey(group));
+
+    if (dlg.result() == QDialog::Accepted) {
+        instances->setGroupIconKey(group, dlg.selectedIconKey);
+        view->updateGeometries();
+        view->viewport()->update();
+    }
+}
+
+void MainWindow::removeGroupIcon(QString group)
+{
+    Q_ASSERT(!group.isEmpty());
+
+    InstanceList* instances = APPLICATION->instances();
+    instances->setGroupIconKey(group, "");
+    view->updateGeometries();
+    view->viewport()->update();
+}
+
 void MainWindow::renameGroup(QString group)
 {
     Q_ASSERT(!group.isEmpty());
@@ -1442,7 +1478,7 @@ void MainWindow::on_actionClearMetadata_triggered()
     APPLICATION->metacache()->SaveNow();
 }
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 void MainWindow::on_actionAddToPATH_triggered()
 {
     auto binaryPath = APPLICATION->applicationFilePath();
