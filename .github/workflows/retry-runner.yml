@@ -1,0 +1,67 @@
+name: Retry jobs without a runner
+
+# GitHub cancels a job it can't find a hosted runner for (macos-26 is often short of capacity), which fails the
+# whole run and, in Build and Release, skips the release. This re-runs those jobs. It re-runs only when every
+# failed job never got a runner, so a real build failure is never retried into a pass.
+on:
+  workflow_run:
+    workflows: ["Build", "Build and Release"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  retry:
+    name: Retry
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.run_attempt < 5
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: write
+      checks: read
+
+    env:
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      - name: Classify failed jobs
+        id: classify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          unacquired=0
+          other=0
+          while IFS=$'\t' read -r id name; do
+            if [ -z "$id" ]; then
+              continue
+            fi
+            messages=$(gh api "repos/$GH_REPO/check-runs/$id/annotations" --jq '.[].message')
+            if grep -q 'was not acquired by Runner' <<< "$messages"; then
+              echo "No runner: $name"
+              unacquired=$((unacquired + 1))
+            else
+              echo "Failed: $name"
+              other=$((other + 1))
+            fi
+          done < <(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/attempts/$ATTEMPT/jobs" --paginate \
+            --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | "\(.id)\t\(.name)"')
+
+          if [ "$unacquired" -gt 0 ] && [ "$other" -eq 0 ]; then
+            echo "retry=true" >> "$GITHUB_OUTPUT"
+          elif [ "$unacquired" -gt 0 ]; then
+            echo "::warning::Not retrying run $RUN_ID: $other job(s) failed on their own"
+          fi
+
+      # A rerun started with GITHUB_TOKEN doesn't fire workflow_run again, so a second shortage would end the
+      # chain. PAT_TOKEN (already used by the upstream sync) keeps retrying up to the attempt limit above.
+      - name: Re-run failed jobs
+        if: steps.classify.outputs.retry == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        run: gh run rerun "$RUN_ID" --failed
