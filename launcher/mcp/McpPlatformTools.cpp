@@ -613,7 +613,8 @@ void registerPlatformTools(ToolRegistry& registry)
             "Searches Modrinth and CurseForge for mods, modpacks, resource packs, shader packs or data packs, optionally filtered by "
             "Minecraft version and mod loader. Each result carries its platform and projectId, which content_versions and the install "
             "tools take. Both platforms are searched by default; a project listed on both appears once per platform. Pages hold about "
-            "25 results per platform; use offset for more.";
+            "25 results per platform; use offset for more. Returns {results: [{platform, projectId, slug, name, description, authors, url}], "
+            "offset, count, notes?} (notes say when a platform was skipped or failed).";
         tool.inputSchema = object({
             { "query", string("Search words; empty browses by sort order") },
             { "kind", string("What to search for (default mod)", kindNames()) },
@@ -687,6 +688,11 @@ void registerPlatformTools(ToolRegistry& registry)
                                             { "platform", "projectId" }));
                      items["minItems"] = 1;
                      items["maxItems"] = 200;
+                     items["description"] =
+                         "The projects to install, 1 to 200: platform plus projectId from search_content, and optionally a "
+                         "versionId from content_versions to pin a version. Example: [{\"platform\": \"modrinth\", "
+                         "\"projectId\": \"AANobbMI\"}]";
+                     items["examples"] = QJsonArray{ QJsonArray{ QJsonObject{ { "platform", "modrinth" }, { "projectId", "AANobbMI" } } } };
                      return items;
                  }() },
                 { "dependencies", string("Mods: add required dependencies (default required)", { "required", "none" }) },

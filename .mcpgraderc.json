@@ -4,5 +4,12 @@
     "batch": "batch",
     "search_ops": "search",
     "call": "none"
-  }
+  },
+  "exceptions": [
+    {
+      "rule": "S007",
+      "tool": "create_instance",
+      "reason": "One creation tool for the three sources (vanilla+loader, modpack, import) that takes every choice the launcher's dialogs would ask, so an agent never meets a dialog; each parameter is scoped by source in its description. context/mcp-server.md, section 4 and 'Unattended pack installs'."
+    }
+  ]
 }

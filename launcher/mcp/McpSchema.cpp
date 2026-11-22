@@ -162,10 +162,8 @@ Result<> validate(const QJsonValue& value, const QJsonObject& schema)
 
 QJsonObject object(const QJsonObject& properties, const QStringList& required, bool closed)
 {
-    QJsonObject out{ { "type", "object" }, { "properties", properties } };
-    if (!required.isEmpty()) {
-        out["required"] = QJsonArray::fromStringList(required);
-    }
+    // "required" is always present, empty when every parameter is optional, so a model never has to guess
+    QJsonObject out{ { "type", "object" }, { "properties", properties }, { "required", QJsonArray::fromStringList(required) } };
     if (closed) {
         out["additionalProperties"] = false;
     }
@@ -220,6 +218,16 @@ QJsonObject array(const QJsonObject& items, const QString& description)
 QJsonObject withDescription(QJsonObject schema, const QString& description)
 {
     schema["description"] = description;
+    return schema;
+}
+
+}  // namespace Mcp::Schema
+
+namespace Mcp::Schema {
+
+QJsonObject withExamples(QJsonObject schema, const QJsonArray& examples)
+{
+    schema["examples"] = examples;
     return schema;
 }
 

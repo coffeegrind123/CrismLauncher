@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QString>
@@ -25,5 +26,7 @@ QJsonObject integer(const QString& description, std::optional<qint64> minimum = 
 QJsonObject boolean(const QString& description);
 QJsonObject array(const QJsonObject& items, const QString& description = {});
 QJsonObject withDescription(QJsonObject schema, const QString& description);
+// Adds JSON Schema "examples" (shown to the model next to the description)
+QJsonObject withExamples(QJsonObject schema, const QJsonArray& examples);
 
 }  // namespace Mcp::Schema

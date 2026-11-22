@@ -469,16 +469,17 @@ void registerOpTools(ToolRegistry& tools, const ToolRegistry* ops)
         tool.name = "call";
         tool.title = "Run a launcher operation";
         tool.description =
-            "Runs one operation from the catalog (see search_ops) with its arguments, with the same validation as a direct tool, "
+            "Calls one operation from the catalog (see search_ops) with its arguments, with the same validation as a direct tool, "
             "and returns the op's own result (its outputSchema in search_ops detail=full). For several ops use batch; for "
             "loops or conditions use execute. Each op needs a scope; write ops may ask the user to confirm first. Errors carry "
             "a code and a hint.";
         tool.inputSchema = object(
             {
                 { "op", string("Catalog op name from search_ops. Example: \"components.list\"") },
-                { "arguments", withDescription(object({}, {}, false),
-                                               "The op's arguments, per its inputSchema (empty object when it takes none). "
-                                               "Example: {\"instance\": \"1.21.1 Fabric\"}") },
+                { "arguments", withExamples(withDescription(object({}, {}, false),
+                                                            "The op's arguments, per its inputSchema (empty object when it takes none). "
+                                                            "Example: {\"instance\": \"1.21.1 Fabric\"}"),
+                                            QJsonArray{ QJsonObject{ { "instance", "1.21.1 Fabric" } } }) },
             },
             { "op" });
         tool.annotations.readOnly = false;
@@ -497,7 +498,7 @@ void registerOpTools(ToolRegistry& tools, const ToolRegistry* ops)
         tool.name = "batch";
         tool.title = "Run several launcher operations";
         tool.description = QString(
-            "Runs a known sequence of catalog ops (search_ops finds them) in one call, in order, passing results forward; use "
+            "Runs a batch: a known sequence of catalog ops (search_ops finds them) in one call, in order, passing results forward; use "
             "execute instead when the next step depends on loops or conditions. Every op name and scope is checked, and every "
             "confirmation the steps need is asked once, before the first step runs. Stops at the first failure unless "
             "continueOnError is true. Not transactional: ops that ran stay applied (files and downloads cannot be rolled back), "
@@ -521,6 +522,10 @@ void registerOpTools(ToolRegistry& tools, const ToolRegistry* ops)
                              .arg(MAX_BATCH_OPS));
                      steps["minItems"] = 1;
                      steps["maxItems"] = MAX_BATCH_OPS;
+                     steps["examples"] = QJsonArray{ QJsonArray{
+                         QJsonObject{ { "op", "groups.list" } },
+                         QJsonObject{ { "op", "instance.set_group" },
+                                      { "arguments", QJsonObject{ { "instance", "abc" }, { "group", "$0.groups.0" } } } } } };
                      return steps;
                  }() },
                 { "continueOnError", boolean("Keep going after a failed step and report every outcome (default false: stop at the "

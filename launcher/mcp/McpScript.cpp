@@ -930,7 +930,7 @@ void registerScriptTool(ToolRegistry& tools, const ToolRegistry* ops)
     tool.name = "execute";
     tool.title = "Run a JavaScript program against the launcher";
     tool.description = QString(
-        "Runs JavaScript (QuickJS, ES2023) that drives the launcher through its whole API: every catalog op as "
+        "Executes JavaScript (QuickJS, ES2023) that drives the launcher through its whole API: every catalog op as "
         "`await launcher.<area>.<op>(args)` (search_ops lists them, e.g. launcher.content.list({instance, kind: \"mods\"})) and "
         "every direct tool as `await launcher.<tool>(args)` (launcher.instances(), launcher.instance_get({instance})). Use it for "
         "loops, conditions and computed arguments; use batch for a fixed sequence. `code` is the body of an async function: "

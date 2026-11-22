@@ -477,7 +477,9 @@ void registerCreateTool(ToolRegistry& registry)
             { "platform", string("modpack: where it lives", { "modrinth", "curseforge" }) },
             { "projectId", string("modpack: project id") },
             { "versionId", string("modpack: a versionId from content_versions kind=modpack") },
-            { "optionalFiles", withDescription(array(string({})), "modpack/import: optional pack files to enable, by path inside the pack") },
+            { "optionalFiles", withExamples(withDescription(array(string({})), "modpack/import: optional pack files to enable, by path "
+                                                                               "inside the pack. Example: [\"mods/journeymap.jar\"]"),
+                                            QJsonArray{ QJsonArray{ "mods/journeymap.jar" } }) },
             { "url", string("import: http(s) URL or local path of the archive") },
         },
         { "source" });

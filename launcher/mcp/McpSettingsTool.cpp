@@ -301,8 +301,12 @@ void registerSettingsTool(ToolRegistry& registry)
             { "target", string("\"launcher\" (default) or an instance id") },
             { "query", string("list: substring of the key") },
             { "limit", integer("list: maximum settings returned (default 300)", 1, 2000) },
-            { "keys", withDescription(array(string({})), "get: the keys to read") },
-            { "values", withDescription(object({}, {}, false), "set: key to new value") },
+            { "keys", withExamples(withDescription(array(string({})), "get: the keys to read (action=list shows them). "
+                                                                        "Example: [\"MaxMemAlloc\", \"MinMemAlloc\"]"),
+                                   QJsonArray{ QJsonArray{ "MaxMemAlloc", "MinMemAlloc" } }) },
+            { "values", withExamples(withDescription(object({}, {}, false), "set: key to new value, typed as the setting is. "
+                                                                             "Example: {\"MaxMemAlloc\": 8192}"),
+                                     QJsonArray{ QJsonObject{ { "MaxMemAlloc", 8192 } } }) },
         },
         { "action" });
     tool.outputSchema = object({ { "target", string({}) },
