@@ -34,11 +34,11 @@ MinecraftInstance* requireInstance(const QJsonObject& arguments, const ToolReply
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return nullptr;
     }
     if (mustBeStopped && (*found)->isRunning()) {
-        reply(ToolResult::error(QString("Instance '%1' is running; changing it now could crash the game.").arg((*found)->name()),
+        reply(ToolResult::error(ErrorCode::Busy, QString("Instance '%1' is running; changing it now could crash the game.").arg((*found)->name()),
                                 "Stop it first (launch op stop) or wait until it exits."));
         return nullptr;
     }
@@ -76,7 +76,7 @@ void instanceRename(const CallContext&, const QJsonObject& arguments, const Tool
     }
     const auto name = arguments.value("name").toString().trimmed();
     if (name.isEmpty()) {
-        reply(ToolResult::error("The new name is empty."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, "The new name is empty."));
         return;
     }
     const auto old = instance->name();
@@ -120,7 +120,7 @@ void instanceDelete(const CallContext&, const QJsonObject& arguments, const Tool
         return;
     }
     if (!arguments.value("permanent").toBool(false)) {
-        reply(ToolResult::error(QString("Could not move '%1' to the trash (none on this system, or it failed).").arg(name),
+        reply(ToolResult::error(ErrorCode::Failed, QString("Could not move '%1' to the trash (none on this system, or it failed).").arg(name),
                                 "Pass permanent=true to delete it for good; that cannot be undone."));
         return;
     }
@@ -132,11 +132,11 @@ void instanceUndoDelete(const CallContext&, const QJsonObject&, const ToolReply&
 {
     auto* instances = APPLICATION->instances();
     if (!instances->trashedSomething()) {
-        reply(ToolResult::error("Nothing deleted in this session can be restored."));
+        reply(ToolResult::error(ErrorCode::NotFound, "Nothing deleted in this session can be restored."));
         return;
     }
     if (!instances->undoTrashInstance()) {
-        reply(ToolResult::error("Restoring the most recently deleted instance failed."));
+        reply(ToolResult::error(ErrorCode::Failed, "Restoring the most recently deleted instance failed."));
         return;
     }
     reply(ToolResult::ok(QJsonObject{ { "restored", true } }, "Restored the most recently deleted instance; call instances to see it."));
@@ -148,11 +148,11 @@ void groupsRename(const CallContext&, const QJsonObject& arguments, const ToolRe
     const auto from = arguments.value("from").toString();
     const auto to = arguments.value("to").toString().trimmed();
     if (!instances->getGroups().contains(from)) {
-        reply(ToolResult::error(QString("No group '%1'.").arg(from), "Call groups.list for the names."));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No group '%1'.").arg(from), "Call groups.list for the names."));
         return;
     }
     if (to.isEmpty()) {
-        reply(ToolResult::error("The new group name is empty."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, "The new group name is empty."));
         return;
     }
     instances->renameGroup(from, to);
@@ -164,7 +164,7 @@ void groupsDelete(const CallContext&, const QJsonObject& arguments, const ToolRe
     auto* instances = APPLICATION->instances();
     const auto name = arguments.value("name").toString();
     if (!instances->getGroups().contains(name)) {
-        reply(ToolResult::error(QString("No group '%1'.").arg(name), "Call groups.list for the names."));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No group '%1'.").arg(name), "Call groups.list for the names."));
         return;
     }
     instances->deleteGroup(name);
@@ -199,7 +199,7 @@ void componentsSetVersion(const CallContext&, const QJsonObject& arguments, cons
             for (const auto& conflict : conflicts) {
                 names.append(QString("%1 (%2)").arg(conflict->getName(), conflict->getID()));
             }
-            reply(ToolResult::error(QString("%1 conflicts with %2 on this instance. Nothing was changed.").arg(uid, names.join(", ")),
+            reply(ToolResult::error(ErrorCode::Conflict, QString("%1 conflicts with %2 on this instance. Nothing was changed.").arg(uid, names.join(", ")),
                                     "Call again with conflicts=disable or conflicts=remove (or keep, which will likely break it)."));
             return;
         }
@@ -234,7 +234,7 @@ void componentsSetVersion(const CallContext&, const QJsonObject& arguments, cons
         component->setEnabled(true);
     }
     if (!profile->setComponentVersion(uid, version, important)) {
-        reply(ToolResult::error(QString("Could not change %1 (the component refused the change).").arg(uid)));
+        reply(ToolResult::error(ErrorCode::Failed, QString("Could not change %1 (the component refused the change).").arg(uid)));
         return;
     }
     profile->resolve(Net::Mode::Online);
@@ -255,15 +255,15 @@ void componentsRemove(const CallContext&, const QJsonObject& arguments, const To
     const auto uid = arguments.value("uid").toString();
     const auto component = profile->getComponent(uid);
     if (!component) {
-        reply(ToolResult::error(QString("Instance has no component '%1'.").arg(uid), "Call components.list for its components."));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("Instance has no component '%1'.").arg(uid), "Call components.list for its components."));
         return;
     }
     if (!component->isRemovable()) {
-        reply(ToolResult::error(QString("%1 cannot be removed (it is required).").arg(uid)));
+        reply(ToolResult::error(ErrorCode::Conflict, QString("%1 cannot be removed (it is required).").arg(uid)));
         return;
     }
     if (!profile->remove(uid)) {
-        reply(ToolResult::error(QString("Removing %1 failed.").arg(uid)));
+        reply(ToolResult::error(ErrorCode::Failed, QString("Removing %1 failed.").arg(uid)));
         return;
     }
     profile->resolve(Net::Mode::Online);
@@ -316,7 +316,7 @@ void contentToggle(const QJsonObject& arguments, const ToolReply& reply, EnableA
     const auto kind = *contentKindFromName(kindName);
     auto modelResult = contentModel(instance, kind);
     if (!modelResult) {
-        reply(ToolResult::error(modelResult.error()));
+        reply(ToolResult::error(ErrorCode::Unavailable, modelResult.error()));
         return;
     }
     auto* model = *modelResult;
@@ -326,7 +326,7 @@ void contentToggle(const QJsonObject& arguments, const ToolReply& reply, EnableA
     whenModelReady(model, [model, kind, withDependencies, files, reply, action, instance] {
         auto rows = rowsFor(model, files);
         if (!rows) {
-            reply(ToolResult::error(rows.error()));
+            reply(ToolResult::error(ErrorCode::Failed, rows.error()));
             return;
         }
         auto targets = *rows;
@@ -345,7 +345,7 @@ void contentToggle(const QJsonObject& arguments, const ToolReply& reply, EnableA
         }
         // The base implementation: the Mods page's override would open a dialog about dependencies, decided above instead
         if (!model->ResourceFolderModel::setResourceEnabled(targets, action)) {
-            reply(ToolResult::error("The launcher could not change some of the files (see its log)."));
+            reply(ToolResult::error(ErrorCode::Failed, "The launcher could not change some of the files (see its log)."));
             return;
         }
         reply(ToolResult::ok(QJsonObject{ { "instance", instance->id() }, { "enabled", action == EnableAction::ENABLE }, { "files", changed } }));
@@ -360,7 +360,7 @@ void contentRemove(const CallContext&, const QJsonObject& arguments, const ToolR
     }
     auto modelResult = contentModel(instance, *contentKindFromName(arguments.value("kind").toString("mods")));
     if (!modelResult) {
-        reply(ToolResult::error(modelResult.error()));
+        reply(ToolResult::error(ErrorCode::Unavailable, modelResult.error()));
         return;
     }
     auto* model = *modelResult;
@@ -368,11 +368,11 @@ void contentRemove(const CallContext&, const QJsonObject& arguments, const ToolR
     whenModelReady(model, [model, files, reply, instance] {
         auto rows = rowsFor(model, files);
         if (!rows) {
-            reply(ToolResult::error(rows.error()));
+            reply(ToolResult::error(ErrorCode::Failed, rows.error()));
             return;
         }
         if (!model->deleteResources(*rows)) {
-            reply(ToolResult::error("The launcher could not remove some of the files (see its log)."));
+            reply(ToolResult::error(ErrorCode::Failed, "The launcher could not remove some of the files (see its log)."));
             return;
         }
         reply(ToolResult::ok(QJsonObject{ { "instance", instance->id() }, { "removed", files } },

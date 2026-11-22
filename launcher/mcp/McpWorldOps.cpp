@@ -35,11 +35,11 @@ MinecraftInstance* instanceFrom(const QJsonObject& arguments, const ToolReply& r
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return nullptr;
     }
     if (mustBeStopped && (*found)->isRunning()) {
-        reply(ToolResult::error(QString("'%1' is running; the game may be using its worlds.").arg((*found)->name()), "Stop it first."));
+        reply(ToolResult::error(ErrorCode::Busy, QString("'%1' is running; the game may be using its worlds.").arg((*found)->name()), "Stop it first."));
         return nullptr;
     }
     return *found;
@@ -60,14 +60,14 @@ int worldRow(WorldList* worlds, const QString& folder)
 
 void noSuchWorld(const QString& folder, const ToolReply& reply)
 {
-    reply(ToolResult::error(QString("No world folder '%1'.").arg(folder), "worlds.list gives the folder names."));
+    reply(ToolResult::error(ErrorCode::NotFound, QString("No world folder '%1'.").arg(folder), "worlds.list gives the folder names."));
 }
 
 void startWorldJob(const CallContext& context, std::unique_ptr<Task> task, const QString& title, const ToolReply& reply)
 {
     auto* registry = jobs();
     if (!registry || !task) {
-        reply(ToolResult::error("The launcher could not start that."));
+        reply(ToolResult::error(ErrorCode::Failed, "The launcher could not start that."));
         return;
     }
     const auto id = registry->start(context.token.id, context.token.name, title, Task::Ptr(task.release()));
@@ -94,7 +94,7 @@ void worldsRename(const CallContext&, const QJsonObject& arguments, const ToolRe
     World world = worlds->allWorlds().at(row);
     const auto name = arguments.value("name").toString().trimmed();
     if (name.isEmpty() || !world.rename(name)) {
-        reply(ToolResult::error(QString("Could not rename '%1'.").arg(folder)));
+        reply(ToolResult::error(ErrorCode::Failed, QString("Could not rename '%1'.").arg(folder)));
         return;
     }
     worlds->update();
@@ -143,7 +143,7 @@ void worldsDelete(const CallContext& context, const QJsonObject& arguments, cons
         return;
     }
     if (!arguments.value("permanent").toBool(false)) {
-        reply(ToolResult::error("Moving the world to the trash failed (or there is none).",
+        reply(ToolResult::error(ErrorCode::Failed, "Moving the world to the trash failed (or there is none).",
                                 "Pass permanent=true to delete it for good, perhaps after worlds.backup."));
         return;
     }
@@ -237,7 +237,7 @@ void serversChange(const QJsonObject& arguments, const ToolReply& reply, const Q
     auto servers = readServers(instance);
     const int index = arguments.value("index").toInt(-1);
     if (action != "add" && (index < 0 || index >= servers.size())) {
-        reply(ToolResult::error(QString("No server at index %1.").arg(index), "servers.list gives the indexes."));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No server at index %1.").arg(index), "servers.list gives the indexes."));
         return;
     }
 
@@ -261,7 +261,7 @@ void serversChange(const QJsonObject& arguments, const ToolReply& reply, const Q
     }
 
     if (!writeServers(instance, servers)) {
-        reply(ToolResult::error("Could not write servers.dat."));
+        reply(ToolResult::error(ErrorCode::Failed, "Could not write servers.dat."));
         return;
     }
     auto result = ToolResult::ok(QJsonObject{ { "instance", instance->id() }, { "servers", serversJson(servers) } });

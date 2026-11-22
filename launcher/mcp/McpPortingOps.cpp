@@ -352,23 +352,23 @@ void analyzeOp(const CallContext&, const QJsonObject& arguments, const ToolReply
     if (arguments.contains("instance")) {
         auto found = findInstance(arguments.value("instance").toString());
         if (!found) {
-            reply(ToolResult::error(found.error()));
+            reply(ToolResult::error(ErrorCode::NotFound, found.error()));
             return;
         }
         auto modelResult = contentModel(*found, *contentKindFromName(arguments.value("kind").toString("mods")));
         if (!modelResult) {
-            reply(ToolResult::error(modelResult.error()));
+            reply(ToolResult::error(ErrorCode::Unavailable, modelResult.error()));
             return;
         }
         auto* model = *modelResult;
         const auto path = model->dir().absoluteFilePath(arguments.value("file").toString());
         if (arguments.value("file").toString().contains('/') || !QFileInfo(path).isFile()) {
-            reply(ToolResult::error("No such file in that folder.", "content.list gives the file names."));
+            reply(ToolResult::error(ErrorCode::NotFound, "No such file in that folder.", "content.list gives the file names."));
             return;
         }
         auto report = analyzeJar(path);
         if (!report) {
-            reply(ToolResult::error(report.error()));
+            reply(ToolResult::error(ErrorCode::Failed, report.error()));
             return;
         }
         finishAnalysis(*report, {}, target, reply);
@@ -380,7 +380,7 @@ void analyzeOp(const CallContext&, const QJsonObject& arguments, const ToolReply
     const auto projectId = arguments.value("projectId").toString();
     const auto versionId = arguments.value("versionId").toString();
     if (platform.isEmpty() || projectId.isEmpty()) {
-        reply(ToolResult::error("Pass instance + file, or platform + projectId (+ versionId)."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, "Pass instance + file, or platform + projectId (+ versionId)."));
         return;
     }
     const bool curseForge = platform == "curseforge";
@@ -393,7 +393,7 @@ void analyzeOp(const CallContext&, const QJsonObject& arguments, const ToolReply
     auto [projectJob, projectResponse] = api.getProjectTask(projectId, true, false);
     runTask(projectJob, [projectResponse = projectResponse, pack, versionId, target, reply, curseForge](bool ok, const QString& error) {
         if (!ok) {
-            reply(ToolResult::error(QString("Could not load the project: %1").arg(error)));
+            reply(ToolResult::error(ErrorCode::Failed, QString("Could not load the project: %1").arg(error)));
             return;
         }
         const auto sourceUrl = projectResponse->extraData.sourceUrl;
@@ -407,7 +407,7 @@ void analyzeOp(const CallContext&, const QJsonObject& arguments, const ToolReply
                 return versionId.isEmpty() || v.fileId.toString() == versionId;
             });
             if (chosen == versions.end() || chosen->downloadUrl.isEmpty()) {
-                reply(ToolResult::error("No downloadable file for that project/version.", "content_versions lists the versionIds."));
+                reply(ToolResult::error(ErrorCode::NotFound, "No downloadable file for that project/version.", "content_versions lists the versionIds."));
                 return;
             }
             const auto folder = FS::PathCombine(APPLICATION->dataRoot(), CACHE_FOLDER);
@@ -418,12 +418,12 @@ void analyzeOp(const CallContext&, const QJsonObject& arguments, const ToolReply
             download->addNetAction(Net::Request::makeFile(QUrl(chosen->downloadUrl), path));
             runTask(download, [path, sourceUrl, target, reply](bool downloaded, const QString& reason) {
                 if (!downloaded) {
-                    reply(ToolResult::error(QString("Download failed: %1").arg(reason)));
+                    reply(ToolResult::error(ErrorCode::Failed, QString("Download failed: %1").arg(reason)));
                     return;
                 }
                 auto report = analyzeJar(path);
                 if (!report) {
-                    reply(ToolResult::error(report.error()));
+                    reply(ToolResult::error(ErrorCode::Failed, report.error()));
                     return;
                 }
                 report->insert("cachedJar", path);
@@ -432,17 +432,17 @@ void analyzeOp(const CallContext&, const QJsonObject& arguments, const ToolReply
         };
         callbacks.onFail = [reply, keep](const QString& reason, int) {
             keep->reset();
-            reply(ToolResult::error(QString("Could not list versions: %1").arg(reason)));
+            reply(ToolResult::error(ErrorCode::Failed, QString("Could not list versions: %1").arg(reason)));
         };
         callbacks.onAbort = [reply, keep] {
             keep->reset();
-            reply(ToolResult::error("Cancelled"));
+            reply(ToolResult::error(ErrorCode::Cancelled, "Cancelled"));
         };
         const auto& versionApi = curseForge ? static_cast<const ResourceAPI&>(FlameAPI::get()) : static_cast<const ResourceAPI&>(ModrinthAPI::get());
         auto task = versionApi.getProjectVersions({ .pack = pack, .mcVersions = {}, .loaders = {}, .resourceType = ModPlatform::ResourceType::Mod },
                                                   callbacks);
         if (!task) {
-            reply(ToolResult::error("This platform has no version listing for that project."));
+            reply(ToolResult::error(ErrorCode::Unavailable, "This platform has no version listing for that project."));
             return;
         }
         if (auto* netJob = dynamic_cast<NetJob*>(task.get())) {
@@ -457,31 +457,31 @@ void installUrlOp(const CallContext& context, const QJsonObject& arguments, cons
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* instance = *found;
     const QUrl url(arguments.value("url").toString(), QUrl::StrictMode);
     if (!url.isValid() || (url.scheme() != "https" && url.scheme() != "http")) {
-        reply(ToolResult::error("url must be an http(s) link to the file."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, "url must be an http(s) link to the file."));
         return;
     }
     auto fileName = arguments.value("fileName").toString(url.fileName());
     fileName = FS::RemoveInvalidFilenameChars(fileName);
     if (fileName.isEmpty()) {
-        reply(ToolResult::error("Could not tell the file name from the URL; pass fileName."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, "Could not tell the file name from the URL; pass fileName."));
         return;
     }
     auto modelResult = contentModel(instance, *contentKindFromName(arguments.value("kind").toString("mods")));
     if (!modelResult) {
-        reply(ToolResult::error(modelResult.error()));
+        reply(ToolResult::error(ErrorCode::Unavailable, modelResult.error()));
         return;
     }
     auto* model = *modelResult;
     const auto path = model->dir().absoluteFilePath(fileName);
     auto* registry = jobs();
     if (!registry) {
-        reply(ToolResult::error("Jobs are not available."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "Jobs are not available."));
         return;
     }
 

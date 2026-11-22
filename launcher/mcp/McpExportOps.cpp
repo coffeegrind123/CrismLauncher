@@ -77,13 +77,13 @@ void exportOp(const CallContext& context, const QJsonObject& arguments, const To
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* instance = *found;
     auto* registry = jobs();
     if (!registry) {
-        reply(ToolResult::error("Jobs are not available."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "Jobs are not available."));
         return;
     }
     const auto format = arguments.value("format").toString("zip");
@@ -107,7 +107,7 @@ void exportOp(const CallContext& context, const QJsonObject& arguments, const To
         SaveIcon(instance);
         QFileInfoList files;
         if (!MMCZip::collectFileListRecursively(instance->instanceRoot(), nullptr, &files, filterFunction)) {
-            reply(ToolResult::error("Could not list the instance's files."));
+            reply(ToolResult::error(ErrorCode::Failed, "Could not list the instance's files."));
             return;
         }
         task = makeShared<MMCZip::ExportToZipTask>(output, instance->instanceRoot(), files, "", true);
@@ -139,13 +139,13 @@ void copyOp(const CallContext& context, const QJsonObject& arguments, const Tool
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* instance = *found;
     auto* registry = jobs();
     if (!registry) {
-        reply(ToolResult::error("Jobs are not available."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "Jobs are not available."));
         return;
     }
 

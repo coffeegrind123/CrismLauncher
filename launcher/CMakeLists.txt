@@ -623,8 +623,12 @@ set(MCP_SOURCES
     mcp/McpProtocol.h
     mcp/McpSchema.cpp
     mcp/McpSchema.h
+    mcp/McpScript.cpp
+    mcp/McpScript.h
     mcp/McpResources.cpp
     mcp/McpResources.h
+    mcp/McpReplay.cpp
+    mcp/McpReplay.h
     mcp/McpService.cpp
     mcp/McpService.h
     mcp/McpSettingsTool.cpp
@@ -1321,6 +1325,7 @@ target_link_libraries(Launcher_logic
     nbt++
     ${ZLIB_LIBRARIES}
     qdcss
+    quickjs
     BuildConfig
     Qt${QT_VERSION_MAJOR}::Widgets
 )

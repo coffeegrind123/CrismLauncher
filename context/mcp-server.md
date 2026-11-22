@@ -7,7 +7,7 @@ Provisional decisions (asked 2026-11-07, no answer yet; recommended options take
 | Question | Provisional decision |
 |---|---|
 | Exposure | **127.0.0.1 HTTP + `--mcp-stdio` shim.** No LAN, no OAuth (spec: auth is OPTIONAL; local servers SHOULD bind localhost). |
-| Tool shape | **~12 core tools + an op catalog** reached through `search_ops` / `call` / `batch`. Fixed `tools/list`. No JS sandbox. |
+| Tool shape | **~12 core tools + an op catalog** reached through `search_ops` / `call` / `batch`, plus `execute` (JavaScript over the whole API, phase 9; this row said "No JS sandbox" until then). Fixed `tools/list`. |
 | Accounts | **Manage, never secrets.** List, choose default/per-instance, add offline, refresh, remove (confirmed), MSA device-code login finished by the human. |
 | Confirmation | **Per-token policy, in-app prompt.** Default: ask in the launcher window for destructive actions; MCP elicitation (MRTR) as well when the client supports it. |
 
@@ -111,10 +111,11 @@ for that run only if the user enabled it before. Pure relay, no protocol logic o
 | `jobs` | List, wait on, read progress of, or cancel jobs this token started. | read-only / cancel |
 | `search_ops` | Search the op catalog: `detail: names \| signatures \| full`. | read-only |
 | `call` | Run one catalog op by name with JSON args. | per op |
-| `batch` | Run a list of catalog ops, validated whole first, stops at the first failure, `$N.field` refs to earlier results. Not transactional (filesystem/network ops can't roll back); the result says what ran. | per op |
+| `batch` | Run a list of catalog ops, validated whole first, stops at the first failure, `$N.field` refs to earlier results and `${N.field}` inside strings, `operation_id` replay. Not transactional (filesystem/network ops can't roll back); the result says what ran. | per op |
+| `execute` | JavaScript (QuickJS) over every op and direct tool: `await launcher.<area>.<op>(args)`, `return` gives the result; `read_only`, `operation_id`, limits. Typed in `launcher://api/launcher.d.ts`. | per op |
 
 All results: `structuredContent` + an `outputSchema`, and the same as text for clients that ignore it.
-Errors are tool errors (`isError`) with a "did you mean" for ids, keys and op names.
+Errors are tool errors (`isError`) with a stable `code`, a `hint`, and a "did you mean" for ids, keys and op names (§11, phase 9).
 `_meta["anthropic/alwaysLoad"]` on `instances`, `search_content`, `search_ops`.
 
 ## 5. Op catalog (the long tail behind `call` / `batch`)
@@ -323,3 +324,27 @@ Decisions made in phase 1:
 - **batch** checks every op name and scope before running anything, validates each step's arguments after `$N` substitution,
   and reports `isError` when a step failed and `continueOnError` was not set.
 - **jobs** are per token: a token sees and cancels only the jobs it started.
+
+| 9 | Written 2026-11-22 (asked for by the user, after comparing two code-first MCP servers): code mode. `execute` (`McpScript.*`, quickjs-ng 0.18.0 vendored in `libraries/quickjs`), stable error codes on every tool error, `batch` inline refs / `operation_id` / per-step code, hint and time, `launcher://api/launcher.d.ts`. Tests `McpScript_test`, `McpOps_test`. |
+
+Decisions made in phase 9:
+- **Why a code tool now**: the two reference servers. A map-editor MCP server (graded A 100 by the mcpgrade fork's code-mode
+  profile) pairs `batch` with `execute`, JavaScript in QuickJS against a typed `<area>.<op>()` API; a browser-automation server
+  (zendriver-mcp-next) keeps 20 listed tools and puts the rest behind search/call/batch. A batch cannot loop, branch or compute
+  arguments ("disable every mod that lists `client` only", "update the instances that are on 1.21.1"); a script can, in one call.
+- **Engine: quickjs-ng, vendored as its amalgamation** (one C file, MIT, `QJS_BUILD_LIBC` off so no std/os modules): builds with MSVC,
+  unlike Bellard's QuickJS, and in-tree like `qdcss`/`murmur2`, so Nix, Flatpak and the vcpkg builds need no new input. QJSEngine
+  was not used: QtQml is a new Qt module for every packager, the same reason QtHttpServer was not.
+- **Async API**: every op returns a promise settled from the event loop, so installs, downloads and `jobs action=wait` work inside a
+  script and the GUI keeps running between awaits. Limits: wall clock `timeoutSeconds` (default 60, max 600), 5 s of JavaScript without
+  an await (the GUI thread is blocked while JavaScript runs), 64 MiB heap, 256 KiB stack, 256 KiB code, 1 MiB result, 10,000 op calls,
+  200 log lines / 64 KiB. A stopped script cancels the ops it started (their own `cancelled` flag).
+- **Confirmations inside a script are asked in the launcher window only** (`CallContext::confirmInLauncher`): an in-chat (MRTR)
+  answer arrives as a retry of the whole call, which would run the script's earlier ops a second time. `batch` keeps asking once,
+  up front, through either channel.
+- **Not transactional, by necessity**: files, downloads and launches cannot be rolled back. Both tools say so, list what ran, and take
+  `operation_id`: a resend within an hour returns the first result (`replayed: true`); the same id with other arguments is a
+  `conflict`; a call refused before anything ran is not remembered (`McpReplay.*`).
+- **Error codes** (`ErrorCode` in `McpTool.h`) are part of the contract: invalid_argument, unknown_op, not_found, scope_missing, denied,
+  protected, busy, conflict, unavailable, failed, cancelled, timeout, internal, script_error, out_of_memory. Text results start with
+  the code (`not_found: No group 'x'.`), so clients that drop structuredContent still see it.

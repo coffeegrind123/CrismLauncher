@@ -216,18 +216,18 @@ void checkUpdatesOp(const CallContext&, const QJsonObject& arguments, const Tool
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto modelResult = contentModel(*found, *contentKindFromName(arguments.value("kind").toString("mods")));
     if (!modelResult) {
-        reply(ToolResult::error(modelResult.error()));
+        reply(ToolResult::error(ErrorCode::Unavailable, modelResult.error()));
         return;
     }
     auto* model = *modelResult;
     checkForUpdates(*found, model, fileFilter(arguments), arguments.value("findMetadata").toBool(true), [reply](Result<CheckPtr> result) {
         if (!result) {
-            reply(ToolResult::error(QString("Checking for updates failed: %1").arg(result.error())));
+            reply(ToolResult::error(ErrorCode::Failed, QString("Checking for updates failed: %1").arg(result.error())));
             return;
         }
         reply(ToolResult::ok(report(*result)));
@@ -238,17 +238,17 @@ void updateOp(const CallContext& context, const QJsonObject& arguments, const To
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* instance = *found;
     if (instance->isRunning()) {
-        reply(ToolResult::error(QString("'%1' is running; replacing its files now could crash the game.").arg(instance->name())));
+        reply(ToolResult::error(ErrorCode::Busy, QString("'%1' is running; replacing its files now could crash the game.").arg(instance->name())));
         return;
     }
     auto modelResult = contentModel(instance, *contentKindFromName(arguments.value("kind").toString("mods")));
     if (!modelResult) {
-        reply(ToolResult::error(modelResult.error()));
+        reply(ToolResult::error(ErrorCode::Unavailable, modelResult.error()));
         return;
     }
     auto* model = *modelResult;
@@ -256,7 +256,7 @@ void updateOp(const CallContext& context, const QJsonObject& arguments, const To
 
     checkForUpdates(instance, model, fileFilter(arguments), true, [context, instance, model, withDependencies, reply](Result<CheckPtr> result) {
         if (!result) {
-            reply(ToolResult::error(QString("Checking for updates failed: %1").arg(result.error())));
+            reply(ToolResult::error(ErrorCode::Failed, QString("Checking for updates failed: %1").arg(result.error())));
             return;
         }
         auto check = *result;
@@ -267,7 +267,7 @@ void updateOp(const CallContext& context, const QJsonObject& arguments, const To
         }
         auto* registry = jobs();
         if (!registry) {
-            reply(ToolResult::error("Jobs are not available."));
+            reply(ToolResult::error(ErrorCode::Unavailable, "Jobs are not available."));
             return;
         }
         auto tasks = makeShared<ConcurrentTask>(QObject::tr("Update content"), APPLICATION->settings()->get("NumberOfConcurrentDownloads").toInt());

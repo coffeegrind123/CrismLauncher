@@ -127,23 +127,23 @@ namespace {
 void runCommand(const CallContext& context, const QJsonObject& arguments, const ToolReply& reply)
 {
     if (!APPLICATION->settings()->get(SETTING_ALLOW_COMMANDS).toBool()) {
-        reply(ToolResult::error("Running commands is turned off in the launcher.",
+        reply(ToolResult::error(ErrorCode::Unavailable, "Running commands is turned off in the launcher.",
                                 "Only the user can turn it on: Settings > AI agents (MCP) > Allow agents to run commands."));
         return;
     }
     auto* registry = jobs();
     if (!registry) {
-        reply(ToolResult::error("Jobs are not available."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "Jobs are not available."));
         return;
     }
 
     auto cwd = resolveInsideRoot(APPLICATION->dataRoot(), arguments.value("cwd").toString("."));
     if (!cwd) {
-        reply(ToolResult::error(cwd.error(), "cwd is relative to the launcher's data folder, e.g. instances/<id>/minecraft."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, cwd.error(), "cwd is relative to the launcher's data folder, e.g. instances/<id>/minecraft."));
         return;
     }
     if (!QDir(*cwd).exists()) {
-        reply(ToolResult::error(QString("The folder %1 does not exist.").arg(arguments.value("cwd").toString())));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, QString("The folder %1 does not exist.").arg(arguments.value("cwd").toString())));
         return;
     }
 

@@ -55,7 +55,7 @@ void withVersionList(const QString& uid, const ToolReply& reply, std::function<v
 {
     auto list = APPLICATION->metadataIndex()->get(uid);
     if (!list) {
-        reply(ToolResult::error(QString("No metadata for %1.").arg(uid)));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No metadata for %1.").arg(uid)));
         return;
     }
     if (list->isLoaded()) {
@@ -64,7 +64,7 @@ void withVersionList(const QString& uid, const ToolReply& reply, std::function<v
     }
     runTask(list->getLoadTask(), [list, uid, reply, ready](bool ok, const QString& error) {
         if (!ok) {
-            reply(ToolResult::error(QString("Could not load the versions of %1: %2").arg(uid, error)));
+            reply(ToolResult::error(ErrorCode::Failed, QString("Could not load the versions of %1: %2").arg(uid, error)));
             return;
         }
         ready(list);
@@ -77,7 +77,7 @@ void startCreation(const CallContext& context, InstanceTask* task, const Options
     auto* registry = jobs();
     if (!registry) {
         delete task;
-        reply(ToolResult::error("Jobs are not available."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "Jobs are not available."));
         return;
     }
     if (!options.name.isEmpty()) {
@@ -113,13 +113,13 @@ void createVanilla(const CallContext& context, const QJsonObject& arguments, Opt
 {
     const auto minecraft = arguments.value("minecraft").toString();
     if (minecraft.isEmpty()) {
-        reply(ToolResult::error("source=vanilla needs `minecraft`, e.g. \"1.21.1\".", "components.available_versions uid=net.minecraft lists them."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, "source=vanilla needs `minecraft`, e.g. \"1.21.1\".", "components.available_versions uid=net.minecraft lists them."));
         return;
     }
     const auto loader = arguments.value("loader").toString();
     const auto loaderVersionWanted = arguments.value("loaderVersion").toString();
     if (!loader.isEmpty() && !loaderUids().contains(loader)) {
-        reply(ToolResult::error(QString("Unknown loader '%1'.").arg(loader), "Use fabric, quilt, forge, neoforge or liteloader."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, QString("Unknown loader '%1'.").arg(loader), "Use fabric, quilt, forge, neoforge or liteloader."));
         return;
     }
 
@@ -131,7 +131,7 @@ void createVanilla(const CallContext& context, const QJsonObject& arguments, Opt
                 all.append(v->version());
             }
             const auto close = closestMatches(minecraft, all);
-            reply(ToolResult::error(QString("Minecraft %1 does not exist.").arg(minecraft),
+            reply(ToolResult::error(ErrorCode::NotFound, QString("Minecraft %1 does not exist.").arg(minecraft),
                                     close.isEmpty() ? QString() : QString("Closest: %1").arg(close.join(", "))));
             return;
         }
@@ -179,7 +179,7 @@ void createVanilla(const CallContext& context, const QJsonObject& arguments, Opt
                 chosen = firstRelease;
             }
             if (!chosen) {
-                reply(ToolResult::error(loaderVersionWanted.isEmpty()
+                reply(ToolResult::error(ErrorCode::NotFound, loaderVersionWanted.isEmpty()
                                             ? QString("%1 has no version for Minecraft %2.").arg(loader, minecraft)
                                             : QString("%1 %2 does not exist for Minecraft %3.").arg(loader, loaderVersionWanted, minecraft),
                                         QString("components.available_versions uid=%1 minecraft=%2 lists them.").arg(uid, minecraft)));
@@ -200,12 +200,12 @@ void createFromModpack(const CallContext& context, const QJsonObject& arguments,
     const auto projectId = arguments.value("projectId").toString();
     const auto versionId = arguments.value("versionId").toString();
     if (platform.isEmpty() || projectId.isEmpty()) {
-        reply(ToolResult::error("source=modpack needs `platform` and `projectId` (search_content kind=modpack finds them)."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, "source=modpack needs `platform` and `projectId` (search_content kind=modpack finds them)."));
         return;
     }
     const bool curseForge = platform == "curseforge";
     if (curseForge && !APPLICATION->capabilities().testFlag(Application::SupportsFlame)) {
-        reply(ToolResult::error("CurseForge is not available in this build (no API key)."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "CurseForge is not available in this build (no API key)."));
         return;
     }
     const ResourceAPI& api = curseForge ? static_cast<const ResourceAPI&>(FlameAPI::get()) : static_cast<const ResourceAPI&>(ModrinthAPI::get());
@@ -237,12 +237,12 @@ void createFromModpack(const CallContext& context, const QJsonObject& arguments,
             }
         }
         if (!chosen) {
-            reply(ToolResult::error(versionId.isEmpty() ? QString("The modpack has no versions.") : QString("The modpack has no version '%1'.").arg(versionId),
+            reply(ToolResult::error(ErrorCode::NotFound, versionId.isEmpty() ? QString("The modpack has no versions.") : QString("The modpack has no version '%1'.").arg(versionId),
                                     "content_versions kind=modpack lists them."));
             return;
         }
         if (chosen->downloadUrl.isEmpty()) {
-            reply(ToolResult::error("That modpack version has no download link."));
+            reply(ToolResult::error(ErrorCode::NotFound, "That modpack version has no download link."));
             return;
         }
         QMap<QString, QString> extraInfo;
@@ -253,17 +253,17 @@ void createFromModpack(const CallContext& context, const QJsonObject& arguments,
     };
     callbacks.onFail = [reply, keepAlive](const QString& reason, int) {
         keepAlive->reset();
-        reply(ToolResult::error(QString("Could not list the modpack's versions: %1").arg(reason), "Check platform and projectId."));
+        reply(ToolResult::error(ErrorCode::Failed, QString("Could not list the modpack's versions: %1").arg(reason), "Check platform and projectId."));
     };
     callbacks.onAbort = [reply, keepAlive] {
         keepAlive->reset();
-        reply(ToolResult::error("Cancelled"));
+        reply(ToolResult::error(ErrorCode::Cancelled, "Cancelled"));
     };
 
     auto task = api.getProjectVersions({ .pack = pack, .mcVersions = {}, .loaders = {}, .resourceType = ModPlatform::ResourceType::Modpack },
                                        callbacks);
     if (!task) {
-        reply(ToolResult::error("This platform has no version listing for modpacks."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "This platform has no version listing for modpacks."));
         return;
     }
     if (auto* netJob = dynamic_cast<NetJob*>(task.get())) {
@@ -278,7 +278,7 @@ void createFromImport(const CallContext& context, const QJsonObject& arguments, 
     const auto source = arguments.value("url").toString().trimmed();
     const auto url = QUrl::fromUserInput(source);
     if (source.isEmpty() || !url.isValid()) {
-        reply(ToolResult::error("source=import needs `url`: an http(s) link to a pack archive or a local file path."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, "source=import needs `url`: an http(s) link to a pack archive or a local file path."));
         return;
     }
     // The user allowed this import (it is confirmed as a destructive action), so files the pack ships itself are kept
@@ -312,26 +312,26 @@ void updatePack(const CallContext& context, const QJsonObject& arguments, const 
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* instance = *found;
     if (!instance->isManagedPack()) {
-        reply(ToolResult::error(QString("'%1' was not installed from a modpack platform.").arg(instance->name())));
+        reply(ToolResult::error(ErrorCode::Conflict, QString("'%1' was not installed from a modpack platform.").arg(instance->name())));
         return;
     }
     const auto type = instance->getManagedPackType();
     if (type != "modrinth" && type != "flame") {
-        reply(ToolResult::error(QString("Updating %1 packs is not supported here; use the launcher's Modpack page.").arg(type)));
+        reply(ToolResult::error(ErrorCode::Conflict, QString("Updating %1 packs is not supported here; use the launcher's Modpack page.").arg(type)));
         return;
     }
     if (instance->isRunning()) {
-        reply(ToolResult::error(QString("'%1' is running; stop it before updating.").arg(instance->name())));
+        reply(ToolResult::error(ErrorCode::Busy, QString("'%1' is running; stop it before updating.").arg(instance->name())));
         return;
     }
     const bool curseForge = type == "flame";
     if (curseForge && !APPLICATION->capabilities().testFlag(Application::SupportsFlame)) {
-        reply(ToolResult::error("CurseForge is not available in this build (no API key)."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "CurseForge is not available in this build (no API key)."));
         return;
     }
     const ResourceAPI& api = curseForge ? static_cast<const ResourceAPI&>(FlameAPI::get()) : static_cast<const ResourceAPI&>(ModrinthAPI::get());
@@ -350,7 +350,7 @@ void updatePack(const CallContext& context, const QJsonObject& arguments, const 
         keepAlive->reset();
         auto* target = APPLICATION->instances()->getInstanceById(instanceId);
         if (!target) {
-            reply(ToolResult::error("The instance disappeared."));
+            reply(ToolResult::error(ErrorCode::NotFound, "The instance disappeared."));
             return;
         }
         std::optional<ModPlatform::IndexedVersion> chosen;
@@ -365,7 +365,7 @@ void updatePack(const CallContext& context, const QJsonObject& arguments, const 
             chosen = versions.first();
         }
         if (!chosen) {
-            reply(ToolResult::error(versionId.isEmpty() ? QString("The pack has no versions.") : QString("The pack has no version '%1'.").arg(versionId),
+            reply(ToolResult::error(ErrorCode::NotFound, versionId.isEmpty() ? QString("The pack has no versions.") : QString("The pack has no version '%1'.").arg(versionId),
                                     "content_versions kind=modpack lists them."));
             return;
         }
@@ -375,7 +375,7 @@ void updatePack(const CallContext& context, const QJsonObject& arguments, const 
             return;
         }
         if (chosen->downloadUrl.isEmpty()) {
-            reply(ToolResult::error("That pack version has no download link."));
+            reply(ToolResult::error(ErrorCode::NotFound, "That pack version has no download link."));
             return;
         }
 
@@ -398,17 +398,17 @@ void updatePack(const CallContext& context, const QJsonObject& arguments, const 
     };
     callbacks.onFail = [reply, keepAlive](const QString& reason, int) {
         keepAlive->reset();
-        reply(ToolResult::error(QString("Could not list the pack's versions: %1").arg(reason)));
+        reply(ToolResult::error(ErrorCode::Failed, QString("Could not list the pack's versions: %1").arg(reason)));
     };
     callbacks.onAbort = [reply, keepAlive] {
         keepAlive->reset();
-        reply(ToolResult::error("Cancelled"));
+        reply(ToolResult::error(ErrorCode::Cancelled, "Cancelled"));
     };
 
     auto task = api.getProjectVersions({ .pack = pack, .mcVersions = {}, .loaders = {}, .resourceType = ModPlatform::ResourceType::Modpack },
                                        callbacks);
     if (!task) {
-        reply(ToolResult::error("This platform has no version listing for modpacks."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "This platform has no version listing for modpacks."));
         return;
     }
     if (auto* netJob = dynamic_cast<NetJob*>(task.get())) {

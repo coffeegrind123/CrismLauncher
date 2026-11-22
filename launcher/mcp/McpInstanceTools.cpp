@@ -102,7 +102,7 @@ void instanceGet(const CallContext&, const QJsonObject& arguments, const ToolRep
 {
     auto found = instanceArgument(arguments);
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* instance = *found;
@@ -155,7 +155,7 @@ void jobsTool(const CallContext& context, const QJsonObject& arguments, const To
 {
     auto* registry = jobs();
     if (!registry) {
-        reply(ToolResult::error("Jobs are not available."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "Jobs are not available."));
         return;
     }
     const auto action = arguments.value("action").toString("list");
@@ -172,7 +172,7 @@ void jobsTool(const CallContext& context, const QJsonObject& arguments, const To
 
     const auto info = registry->get(id);
     if (!info || info->tokenId != context.token.id) {
-        reply(ToolResult::error(QString("No job '%1' started by this token.").arg(id), "Use action=list to see this token's jobs."));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No job '%1' started by this token.").arg(id), "Use action=list to see this token's jobs."));
         return;
     }
 
@@ -225,7 +225,7 @@ void componentsList(const CallContext&, const QJsonObject& arguments, const Tool
 {
     auto found = instanceArgument(arguments);
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     reply(ToolResult::ok(QJsonObject{ { "instance", (*found)->id() }, { "components", componentsJson(*found) } }));
@@ -240,7 +240,7 @@ void availableVersions(const CallContext&, const QJsonObject& arguments, const T
 
     auto list = APPLICATION->metadataIndex()->get(uid);
     if (!list) {
-        reply(ToolResult::error(QString("Unknown component '%1'.").arg(uid),
+        reply(ToolResult::error(ErrorCode::NotFound, QString("Unknown component '%1'.").arg(uid),
                                 "Common uids: net.minecraft, net.fabricmc.fabric-loader, org.quiltmc.quilt-loader, net.minecraftforge, "
                                 "net.neoforged, com.mumfrey.liteloader."));
         return;
@@ -290,7 +290,7 @@ void availableVersions(const CallContext&, const QJsonObject& arguments, const T
     }
     runTask(list->getLoadTask(), [respond, reply, uid](bool ok, const QString& error) {
         if (!ok) {
-            reply(ToolResult::error(QString("Could not load versions of %1: %2").arg(uid, error)));
+            reply(ToolResult::error(ErrorCode::Failed, QString("Could not load versions of %1: %2").arg(uid, error)));
             return;
         }
         respond();
@@ -301,7 +301,7 @@ void contentList(const CallContext&, const QJsonObject& arguments, const ToolRep
 {
     auto found = instanceArgument(arguments);
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* instance = *found;
@@ -311,7 +311,7 @@ void contentList(const CallContext&, const QJsonObject& arguments, const ToolRep
     const int limit = arguments.value("limit").toInt(DEFAULT_CONTENT_LIMIT);
     auto modelResult = contentModel(instance, *contentKindFromName(kindName));
     if (!modelResult) {
-        reply(ToolResult::error(modelResult.error()));
+        reply(ToolResult::error(ErrorCode::Unavailable, modelResult.error()));
         return;
     }
     auto* model = *modelResult;
@@ -345,7 +345,7 @@ void worldsList(const CallContext&, const QJsonObject& arguments, const ToolRepl
 {
     auto found = instanceArgument(arguments);
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* worlds = (*found)->worldList();

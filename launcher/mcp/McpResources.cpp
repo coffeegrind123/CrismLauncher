@@ -6,6 +6,7 @@
 #include <QRegularExpression>
 #include <QUrl>
 
+#include "mcp/McpScript.h"
 #include "mcp/McpTool.h"
 
 namespace Mcp {
@@ -282,7 +283,7 @@ void registerLauncherResources(ResourceCatalog& catalog, const ToolRegistry* too
                     for (const auto& tool : tools->tools()) {
                         text += QString("- `%1`: %2\n").arg(tool.name, tool.title.isEmpty() ? tool.description.section(". ", 0, 0) : tool.title);
                     }
-                    text += "\n## Op catalog (run with `call` or `batch`)\n\n";
+                    text += "\n## Op catalog (run with `call`, `batch`, or `launcher.<area>.<op>()` in `execute`)\n\n";
                     for (const auto& op : ops->tools()) {
                         text += QString("- `%1` (%2%3): %4\n")
                                     .arg(op.name, scopeName(op.scope), op.annotations.readOnly ? QString(", read-only") : QString(),
@@ -292,20 +293,43 @@ void registerLauncherResources(ResourceCatalog& catalog, const ToolRegistry* too
                             "- Instances are addressed by id; projects by platform + projectId.\n"
                             "- Slow work returns a job id; follow it with `jobs action=wait`.\n"
                             "- Each token has scopes and a confirmation policy; refused or declined calls say why.\n"
-                            "- Errors with isError=true carry a hint on how to recover.\n";
+                            "- One op: `call`. A fixed sequence: `batch` (\"$N.path\" passes step N's result on, \"${N.path}\" inside a "
+                            "string). Loops and conditions: `execute`, JavaScript over the API in launcher://api/launcher.d.ts.\n"
+                            "- Neither batch nor execute is transactional: what ran stays applied, and the result lists it. Pass "
+                            "operation_id so a resend never applies the same writes twice.\n"
+                            "- Errors with isError=true carry `code` and usually `hint`. Codes: invalid_argument (fix the arguments), "
+                            "unknown_op (see didYouMean or search_ops), not_found (list again), scope_missing and denied (ask the user), "
+                            "protected (never allowed), busy (retry once free), conflict (change the state first), unavailable, failed, "
+                            "cancelled, timeout (may still have happened: check first), internal; execute adds script_error and "
+                            "out_of_memory.\n";
                     reply(ResourceContent{ uri, MARKDOWN, text });
                 });
 
-    catalog.add({ "launcher://api/ops.schema.json", "ops-schema", "Op catalog schemas", "Every op's description, scope and input JSON Schema.", JSON },
+    catalog.add({ "launcher://api/ops.schema.json", "ops-schema", "Op catalog schemas", "Every op's description, scope, and input and output JSON Schemas.", JSON },
                 [ops](const QString& uri, const QStringList&, const ResourceReply& reply) {
                     QJsonObject out;
                     for (const auto& op : ops->tools()) {
-                        out[op.name] = QJsonObject{ { "description", op.description },
-                                                    { "scope", scopeName(op.scope) },
-                                                    { "readOnly", op.annotations.readOnly },
-                                                    { "inputSchema", op.inputSchema } };
+                        QJsonObject entry{ { "description", op.description },
+                                           { "scope", scopeName(op.scope) },
+                                           { "readOnly", op.annotations.readOnly },
+                                           { "inputSchema", op.inputSchema } };
+                        if (!op.annotations.readOnly) {
+                            entry["destructive"] = op.annotations.destructive;
+                        }
+                        if (!op.outputSchema.isEmpty()) {
+                            entry["outputSchema"] = op.outputSchema;
+                        }
+                        out[op.name] = entry;
                     }
                     reply(ResourceContent{ uri, JSON, toText(out) });
+                });
+
+    catalog.add({ "launcher://api/launcher.d.ts", "script-api", "Script API (TypeScript)",
+                  "TypeScript declarations of everything an execute script can call: launcher.<area>.<op>(args) and "
+                  "launcher.<tool>(args), with argument and result types.",
+                  "application/typescript" },
+                [tools, ops](const QString& uri, const QStringList&, const ResourceReply& reply) {
+                    reply(ResourceContent{ uri, "application/typescript", scriptTypeDeclarations(*tools, *ops) });
                 });
 
     catalog.add({ "launcher://instances/{id}/summary", "instance-summary", "Instance summary",

@@ -27,6 +27,7 @@
 #include "mcp/McpLauncherTools.h"
 #include "mcp/McpOps.h"
 #include "mcp/McpPortingOps.h"
+#include "mcp/McpScript.h"
 #include "mcp/McpUpdateOps.h"
 #include "mcp/McpWorldOps.h"
 #include "mcp/McpWriteOps.h"
@@ -185,6 +186,7 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
     Mcp::registerCommandOps(m_ops);
     Mcp::registerPortingOps(m_ops);
     Mcp::registerOpTools(m_tools, &m_ops);
+    Mcp::registerScriptTool(m_tools, &m_ops);
 
     Mcp::ServerInfo info;
     info.name = BuildConfig.LAUNCHER_APP_BINARY_NAME;
@@ -224,6 +226,7 @@ McpService::McpService(SettingsObject* settings, QString dataRoot, QObject* pare
                 answer(allowed ? Mcp::ConfirmVerdict::allowed() : Mcp::ConfirmVerdict::denied(tr("the user declined in the launcher")));
             });
         };
+        context.confirmInLauncher = context.confirm;
     };
     connect(&m_jobs, &Mcp::JobRegistry::jobChanged, this, &McpService::activityChanged);
     connect(&m_jobs, &Mcp::JobRegistry::jobChanged, this, &McpService::taskUpdated);
@@ -548,8 +551,8 @@ std::optional<QJsonObject> McpService::taskState(const QString& taskId, const QS
             task["status"] = "completed";
             task["statusMessage"] = job->error;
             task["result"] = QJsonObject{
-                { "content", QJsonArray{ QJsonObject{ { "type", "text" }, { "text", job->error } } } },
-                { "structuredContent", QJsonObject{ { "error", job->error } } },
+                { "content", QJsonArray{ QJsonObject{ { "type", "text" }, { "text", "failed: " + job->error } } } },
+                { "structuredContent", QJsonObject{ { "error", job->error }, { "code", Mcp::errorCodeName(Mcp::ErrorCode::Failed) } } },
                 { "isError", true },
             };
             break;
@@ -680,8 +683,12 @@ QString McpService::instructions() const
                "at the same time as you.\n"
                "Start with launcher_info (what exists, what this token may do), then instances (ids for everything else).\n"
                "Direct tools cover the common work: instance_get, search_content / content_versions (Modrinth, CurseForge), "
-               "settings, jobs. Everything else is an op in a catalog: find ops with search_ops, run one with call, run several "
-               "with batch (\"$N.path\" passes an earlier step's result on).\n"
+               "settings, jobs. Everything else is an op in a catalog: find ops with search_ops, run one with call, a fixed "
+               "sequence with batch (\"$N.path\" passes step N's result on, \"${N.path}\" inside a longer string), and loops or "
+               "conditions with execute: JavaScript where every op is `await launcher.<area>.<op>(args)` and every tool "
+               "`await launcher.<tool>(args)`, typed in launcher://api/launcher.d.ts; `return` gives the result. Prefer one "
+               "execute or batch over many single calls. Neither is transactional: what ran stays applied and the result lists "
+               "it; pass operation_id so a resend never applies twice, and read_only=true on execute when only looking.\n"
                "Ids: instances are addressed by the id from `instances`, never by name. Mod-platform projects are addressed by "
                "platform plus projectId.\n"
                "Slow work (installs, downloads) returns a job id at once; follow it with jobs action=wait.\n"
@@ -689,6 +696,8 @@ QString McpService::instructions() const
                "outside the token's scopes returns an error naming the scope; ask the user to grant it rather than retrying.\n"
                "Secrets (account tokens, API keys, proxy passwords) are never returned, and settings that can run programs or "
                "redirect downloads can only be changed by the user.\n"
-               "Errors with isError=true carry a hint on how to recover; follow it.")
+               "Errors with isError=true carry a stable `code` (invalid_argument, unknown_op, not_found, scope_missing, denied, "
+               "protected, busy, conflict, unavailable, failed, cancelled, timeout, internal; execute adds script_error, "
+               "out_of_memory) and usually a hint on how to recover; follow it. After a timeout, check the state before retrying.")
         .arg(BuildConfig.LAUNCHER_DISPLAYNAME);
 }

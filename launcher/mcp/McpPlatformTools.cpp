@@ -183,7 +183,7 @@ void searchContent(const CallContext&, const QJsonObject& arguments, const ToolR
     if (const auto loader = arguments.value("loader").toString(); !loader.isEmpty()) {
         const auto type = ModPlatform::getModLoaderFromString(loader);
         if (static_cast<int>(type) == 0) {
-            reply(ToolResult::error(QString("Unknown loader '%1'.").arg(loader),
+            reply(ToolResult::error(ErrorCode::InvalidArgument, QString("Unknown loader '%1'.").arg(loader),
                                     "Use one of: neoforge, forge, fabric, quilt, liteloader, cauldron, babric, bta-babric, legacy-fabric, "
                                     "ornithe, rift."));
             return;
@@ -205,7 +205,7 @@ void searchContent(const CallContext&, const QJsonObject& arguments, const ToolR
         }
     }
     if (platforms.isEmpty()) {
-        reply(ToolResult::error("No platform available to search.", notes.isEmpty() ? QString() : notes.first().toString()));
+        reply(ToolResult::error(ErrorCode::Unavailable, "No platform available to search.", notes.isEmpty() ? QString() : notes.first().toString()));
         return;
     }
 
@@ -245,7 +245,7 @@ void contentVersions(const CallContext&, const QJsonObject& arguments, const Too
 {
     const auto platform = arguments.value("platform").toString();
     if (platform == PLATFORM_CURSEFORGE && !curseForgeAvailable()) {
-        reply(ToolResult::error("CurseForge is not available in this build (no API key)."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "CurseForge is not available in this build (no API key)."));
         return;
     }
     const int limit = arguments.value("limit").toInt(DEFAULT_VERSION_LIMIT);
@@ -262,7 +262,7 @@ void contentVersions(const CallContext&, const QJsonObject& arguments, const Too
     if (const auto loader = arguments.value("loader").toString(); !loader.isEmpty()) {
         const auto type = ModPlatform::getModLoaderFromString(loader);
         if (static_cast<int>(type) == 0) {
-            reply(ToolResult::error(QString("Unknown loader '%1'.").arg(loader)));
+            reply(ToolResult::error(ErrorCode::InvalidArgument, QString("Unknown loader '%1'.").arg(loader)));
             return;
         }
         args.loaders = ModPlatform::ModLoaderTypes(type);
@@ -295,14 +295,14 @@ void contentVersions(const CallContext&, const QJsonObject& arguments, const Too
                                            { "versions", out } }));
     };
     callbacks.onFail = [finish](const QString& reason, int status) {
-        finish(ToolResult::error(QString("Could not load versions: %1").arg(reason),
+        finish(ToolResult::error(ErrorCode::Failed, QString("Could not load versions: %1").arg(reason),
                                  status == 404 ? QString("Check projectId and platform; search_content returns both.") : QString()));
     };
-    callbacks.onAbort = [finish] { finish(ToolResult::error("Cancelled")); };
+    callbacks.onAbort = [finish] { finish(ToolResult::error(ErrorCode::Cancelled, "Cancelled")); };
 
     auto task = apiFor(platform).getProjectVersions(args, callbacks);
     if (!task) {
-        reply(ToolResult::error("This platform has no version listing for that kind of project."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "This platform has no version listing for that kind of project."));
         return;
     }
     // A failed request would otherwise open a "retry?" dialog and keep the agent waiting on the user
@@ -443,7 +443,7 @@ void startInstall(const CallContext& context,
 {
     auto* registry = jobs();
     if (!registry) {
-        reply(ToolResult::error("Jobs are not available."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "Jobs are not available."));
         return;
     }
     const bool indexed = !APPLICATION->settings()->get("ModMetadataDisabled").toBool();
@@ -469,7 +469,7 @@ void installContent(const CallContext& context, const QJsonObject& arguments, co
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* instance = *found;
@@ -488,7 +488,7 @@ void installContent(const CallContext& context, const QJsonObject& arguments, co
         const auto item = value.toObject();
         const auto platform = item.value("platform").toString();
         if (platform == PLATFORM_CURSEFORGE && !curseForgeAvailable()) {
-            reply(ToolResult::error("CurseForge is not available in this build (no API key)."));
+            reply(ToolResult::error(ErrorCode::Unavailable, "CurseForge is not available in this build (no API key)."));
             return;
         }
         requests.append(InstallRequest{ platform, item.value("projectId").toString(), item.value("versionId").toString() });
@@ -499,7 +499,7 @@ void installContent(const CallContext& context, const QJsonObject& arguments, co
 
     auto modelResult = contentModel(instance, kind);
     if (!modelResult) {
-        reply(ToolResult::error(modelResult.error()));
+        reply(ToolResult::error(ErrorCode::Unavailable, modelResult.error()));
         return;
     }
     auto* model = *modelResult;
@@ -514,7 +514,7 @@ void installContent(const CallContext& context, const QJsonObject& arguments, co
 
         auto finishResolution = [context, instance, model, kind, withDependencies, dryRun, reply, state] {
             if (!state->errors.isEmpty()) {
-                reply(ToolResult::error(QString("Nothing was installed: %1").arg(state->errors.join("; ")),
+                reply(ToolResult::error(ErrorCode::Failed, QString("Nothing was installed: %1").arg(state->errors.join("; ")),
                                         "Check projectId/platform with search_content and versions with content_versions."));
                 return;
             }
@@ -563,7 +563,7 @@ void installContent(const CallContext& context, const QJsonObject& arguments, co
             // A raw pointer: the task outlives this callback, and capturing the owning pointer would keep it alive forever
             runTask(dependencies, [dependencies = dependencies.get(), plan, conclude, reply](bool ok, const QString& error) {
                 if (!ok) {
-                    reply(ToolResult::error(QString("Resolving dependencies failed: %1. Nothing was installed.").arg(error),
+                    reply(ToolResult::error(ErrorCode::Failed, QString("Resolving dependencies failed: %1. Nothing was installed.").arg(error),
                                             "Retry with dependencies=none to install only what you asked for."));
                     return;
                 }

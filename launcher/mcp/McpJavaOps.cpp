@@ -43,7 +43,7 @@ void withList(const QString& uid, const ToolReply& reply, std::function<void(con
 {
     auto list = APPLICATION->metadataIndex()->get(uid);
     if (!list) {
-        reply(ToolResult::error(QString("No metadata for %1.").arg(uid)));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No metadata for %1.").arg(uid)));
         return;
     }
     if (list->isLoaded()) {
@@ -52,7 +52,7 @@ void withList(const QString& uid, const ToolReply& reply, std::function<void(con
     }
     runTask(list->getLoadTask(), [list, reply, ready](bool ok, const QString& error) {
         if (!ok) {
-            reply(ToolResult::error(QString("Could not load the Java versions: %1").arg(error)));
+            reply(ToolResult::error(ErrorCode::Failed, QString("Could not load the Java versions: %1").arg(error)));
             return;
         }
         ready(list);
@@ -76,7 +76,7 @@ void javaAvailable(const CallContext&, const QJsonObject& arguments, const ToolR
 void javaDownload(const CallContext& context, const QJsonObject& arguments, const ToolReply& reply)
 {
     if (!BuildConfig.JAVA_DOWNLOADER_ENABLED) {
-        reply(ToolResult::error("This build of the launcher cannot download Java."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "This build of the launcher cannot download Java."));
         return;
     }
     const auto vendor = arguments.value("vendor").toString("mojang");
@@ -86,24 +86,24 @@ void javaDownload(const CallContext& context, const QJsonObject& arguments, cons
     withList(uid, reply, [context, vendor, major, uid, reply](const Meta::VersionList::Ptr& list) {
         auto version = list->getVersion(QString("java%1").arg(major));
         if (!version || !list->hasVersion(QString("java%1").arg(major))) {
-            reply(ToolResult::error(QString("%1 has no Java %2.").arg(vendor).arg(major), "java.available lists the majors."));
+            reply(ToolResult::error(ErrorCode::NotFound, QString("%1 has no Java %2.").arg(vendor).arg(major), "java.available lists the majors."));
             return;
         }
         // The runtimes for this OS and architecture, newest first, as the Install Java dialog lists them
         auto runtimes = std::make_shared<Java::VersionList>(version);
         runTask(runtimes->getLoadTask(), [context, vendor, major, runtimes, reply](bool ok, const QString& error) {
             if (!ok) {
-                reply(ToolResult::error(QString("Could not load Java %1 builds: %2").arg(major).arg(error)));
+                reply(ToolResult::error(ErrorCode::Failed, QString("Could not load Java %1 builds: %2").arg(major).arg(error)));
                 return;
             }
             runtimes->sortVersions();
             if (runtimes->count() == 0) {
-                reply(ToolResult::error(QString("%1 has no Java %2 build for this system.").arg(vendor).arg(major)));
+                reply(ToolResult::error(ErrorCode::NotFound, QString("%1 has no Java %2 build for this system.").arg(vendor).arg(major)));
                 return;
             }
             auto meta = std::dynamic_pointer_cast<Java::Metadata>(runtimes->at(0));
             if (!meta) {
-                reply(ToolResult::error("Unexpected Java metadata."));
+                reply(ToolResult::error(ErrorCode::Failed, "Unexpected Java metadata."));
                 return;
             }
             const auto finalPath = FS::PathCombine(APPLICATION->javaPath(), meta->m_name);
@@ -116,7 +116,7 @@ void javaDownload(const CallContext& context, const QJsonObject& arguments, cons
                     task = makeShared<Java::ArchiveDownloadTask>(meta->url, finalPath, meta->checksumType, meta->checksumHash);
                     break;
                 case Java::DownloadType::Unknown:
-                    reply(ToolResult::error("Could not determine how to download that Java build."));
+                    reply(ToolResult::error(ErrorCode::Failed, "Could not determine how to download that Java build."));
                     return;
             }
 #if defined(Q_OS_MACOS)
@@ -131,7 +131,7 @@ void javaDownload(const CallContext& context, const QJsonObject& arguments, cons
 
             auto* registry = jobs();
             if (!registry) {
-                reply(ToolResult::error("Jobs are not available."));
+                reply(ToolResult::error(ErrorCode::Unavailable, "Jobs are not available."));
                 return;
             }
             const auto id = registry->start(context.token.id, context.token.name, QString("Download %1 Java %2").arg(vendor).arg(major), task,

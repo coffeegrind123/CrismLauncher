@@ -26,16 +26,56 @@ ToolResult ToolResult::needsInput(const QJsonObject& inputRequired)
     return result;
 }
 
-ToolResult ToolResult::error(const QString& message, const QString& hint)
+QString errorCodeName(ErrorCode code)
+{
+    switch (code) {
+        case ErrorCode::InvalidArgument:
+            return QStringLiteral("invalid_argument");
+        case ErrorCode::UnknownOp:
+            return QStringLiteral("unknown_op");
+        case ErrorCode::NotFound:
+            return QStringLiteral("not_found");
+        case ErrorCode::ScopeMissing:
+            return QStringLiteral("scope_missing");
+        case ErrorCode::Denied:
+            return QStringLiteral("denied");
+        case ErrorCode::Protected:
+            return QStringLiteral("protected");
+        case ErrorCode::Busy:
+            return QStringLiteral("busy");
+        case ErrorCode::Conflict:
+            return QStringLiteral("conflict");
+        case ErrorCode::Unavailable:
+            return QStringLiteral("unavailable");
+        case ErrorCode::Failed:
+            return QStringLiteral("failed");
+        case ErrorCode::Cancelled:
+            return QStringLiteral("cancelled");
+        case ErrorCode::Timeout:
+            return QStringLiteral("timeout");
+        case ErrorCode::Internal:
+            return QStringLiteral("internal");
+        case ErrorCode::ScriptError:
+            return QStringLiteral("script_error");
+        case ErrorCode::OutOfMemory:
+            return QStringLiteral("out_of_memory");
+    }
+    return QStringLiteral("internal");
+}
+
+ToolResult ToolResult::error(ErrorCode code, const QString& message, const QString& hint)
 {
     ToolResult result;
     result.isError = true;
-    QJsonObject error{ { "error", message } };
+    result.code = code;
+    QJsonObject error{ { "error", message }, { "code", errorCodeName(code) } };
     if (!hint.isEmpty()) {
         error["hint"] = hint;
     }
     result.structured = error;
-    result.text = hint.isEmpty() ? message : message + "\n" + hint;
+    // "not_found: No group 'x'." so a client that shows only text still sees the code
+    const auto text = QString("%1: %2").arg(errorCodeName(code), message);
+    result.text = hint.isEmpty() ? text : text + "\nHint: " + hint;
     return result;
 }
 
@@ -141,12 +181,12 @@ QString describeAction(const Tool& tool, const QJsonObject& arguments)
 void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject& arguments, const ToolReply& reply)
 {
     if (!context.token.scopes.testFlag(tool.scope)) {
-        reply(ToolResult::error(QString("This token does not have the '%1' scope, which %2 needs.").arg(scopeName(tool.scope), tool.name),
+        reply(ToolResult::error(ErrorCode::ScopeMissing, QString("This token does not have the '%1' scope, which %2 needs.").arg(scopeName(tool.scope), tool.name),
                                 "The user can grant it in the launcher: Settings > AI agents (MCP) > edit the token."));
         return;
     }
     if (auto valid = Schema::validate(arguments, tool.inputSchema); !valid) {
-        reply(ToolResult::error(QString("Invalid arguments for %1: %2").arg(tool.name, valid.error()),
+        reply(ToolResult::error(ErrorCode::InvalidArgument, QString("Invalid arguments for %1: %2").arg(tool.name, valid.error()),
                                 "Check the inputSchema and call again."));
         return;
     }
@@ -155,7 +195,7 @@ void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject&
         try {
             tool.handler(context, arguments, reply);
         } catch (const std::exception& e) {
-            reply(ToolResult::error(QString("Internal error in %1: %2").arg(tool.name, QString::fromUtf8(e.what()))));
+            reply(ToolResult::error(ErrorCode::Internal, QString("Internal error in %1: %2").arg(tool.name, QString::fromUtf8(e.what()))));
         }
     };
 
@@ -164,7 +204,7 @@ void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject&
         return;
     }
     if (!context.confirm) {
-        reply(ToolResult::error(QString("%1 needs the user's confirmation, and nobody can be asked here.").arg(tool.name)));
+        reply(ToolResult::error(ErrorCode::Denied, QString("%1 needs the user's confirmation, and nobody can be asked here.").arg(tool.name)));
         return;
     }
     context.confirm({ describeAction(tool, arguments) }, [run, reply, name = tool.name](const ConfirmVerdict& verdict) {
@@ -176,7 +216,7 @@ void invokeTool(const Tool& tool, const CallContext& context, const QJsonObject&
                 reply(ToolResult::needsInput(verdict.inputRequired));
                 return;
             case ConfirmVerdict::Kind::Denied:
-                reply(ToolResult::error(QString("The user did not allow %1%2").arg(name, verdict.reason.isEmpty() ? QString(".") : ": " + verdict.reason),
+                reply(ToolResult::error(ErrorCode::Denied, QString("The user did not allow %1%2").arg(name, verdict.reason.isEmpty() ? QString(".") : ": " + verdict.reason),
                                         "Do not retry the same change unless the user asks for it."));
                 return;
         }

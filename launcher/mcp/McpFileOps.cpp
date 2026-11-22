@@ -79,7 +79,7 @@ MinecraftInstance* instanceFrom(const QJsonObject& arguments, const ToolReply& r
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return nullptr;
     }
     return *found;
@@ -108,11 +108,11 @@ void filesList(const CallContext&, const QJsonObject& arguments, const ToolReply
     }
     auto path = resolveInside(instance, arguments.value("path").toString("."));
     if (!path) {
-        reply(ToolResult::error(path.error()));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, path.error()));
         return;
     }
     if (!QFileInfo(*path).isDir()) {
-        reply(ToolResult::error(QString("'%1' is not a folder.").arg(arguments.value("path").toString())));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("'%1' is not a folder.").arg(arguments.value("path").toString())));
         return;
     }
     const bool recursive = arguments.value("recursive").toBool(false);
@@ -153,12 +153,12 @@ void filesRead(const CallContext&, const QJsonObject& arguments, const ToolReply
     const auto relative = arguments.value("path").toString();
     auto path = resolveInside(instance, relative);
     if (!path) {
-        reply(ToolResult::error(path.error()));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, path.error()));
         return;
     }
     QFile file(*path);
     if (!QFileInfo(*path).isFile() || !file.open(QIODevice::ReadOnly)) {
-        reply(ToolResult::error(QString("Cannot read '%1'%2").arg(relative, QFileInfo::exists(*path) ? QString(": not a readable file") : QString(": it does not exist")),
+        reply(ToolResult::error(ErrorCode::NotFound, QString("Cannot read '%1'%2").arg(relative, QFileInfo::exists(*path) ? QString(": not a readable file") : QString(": it does not exist")),
                                 "files.list shows what is there."));
         return;
     }
@@ -194,20 +194,20 @@ void filesWrite(const CallContext&, const QJsonObject& arguments, const ToolRepl
     }
     const auto relative = arguments.value("path").toString();
     if (isProtectedFile(relative)) {
-        reply(ToolResult::error(QString("'%1' is protected: it controls how the instance launches.").arg(relative),
+        reply(ToolResult::error(ErrorCode::Protected, QString("'%1' is protected: it controls how the instance launches.").arg(relative),
                                 "Use the settings tool or the components ops instead."));
         return;
     }
     auto path = resolveInside(instance, relative);
     if (!path) {
-        reply(ToolResult::error(path.error()));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, path.error()));
         return;
     }
     QByteArray data;
     if (arguments.value("encoding").toString("text") == "base64") {
         auto decoded = QByteArray::fromBase64Encoding(arguments.value("content").toString().toLatin1(), QByteArray::AbortOnBase64DecodingErrors);
         if (!decoded) {
-            reply(ToolResult::error("content is not valid base64."));
+            reply(ToolResult::error(ErrorCode::InvalidArgument, "content is not valid base64."));
             return;
         }
         data = *decoded;
@@ -215,16 +215,16 @@ void filesWrite(const CallContext&, const QJsonObject& arguments, const ToolRepl
         data = arguments.value("content").toString().toUtf8();
     }
     if (data.size() > MAX_WRITE_BYTES) {
-        reply(ToolResult::error(QString("Too large: %1 bytes (limit %2).").arg(data.size()).arg(MAX_WRITE_BYTES)));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, QString("Too large: %1 bytes (limit %2).").arg(data.size()).arg(MAX_WRITE_BYTES)));
         return;
     }
     const bool existed = QFileInfo::exists(*path);
     if (QFileInfo(*path).isDir()) {
-        reply(ToolResult::error(QString("'%1' is a folder.").arg(relative)));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, QString("'%1' is a folder.").arg(relative)));
         return;
     }
     if (auto res = FS::write(*path, data); !res) {
-        reply(ToolResult::error(res.error()));
+        reply(ToolResult::error(ErrorCode::Failed, res.error()));
         return;
     }
     reply(ToolResult::ok(QJsonObject{ { "instance", instance->id() }, { "path", relative }, { "bytes", data.size() }, { "created", !existed } }));
@@ -238,20 +238,20 @@ void filesDelete(const CallContext&, const QJsonObject& arguments, const ToolRep
     }
     const auto relative = arguments.value("path").toString();
     if (isProtectedFile(relative) || QDir::cleanPath(relative) == ".") {
-        reply(ToolResult::error(QString("'%1' cannot be deleted by agents.").arg(relative), "instance.delete removes a whole instance."));
+        reply(ToolResult::error(ErrorCode::Protected, QString("'%1' cannot be deleted by agents.").arg(relative), "instance.delete removes a whole instance."));
         return;
     }
     auto path = resolveInside(instance, relative);
     if (!path) {
-        reply(ToolResult::error(path.error()));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, path.error()));
         return;
     }
     if (!QFileInfo::exists(*path)) {
-        reply(ToolResult::error(QString("'%1' does not exist.").arg(relative)));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("'%1' does not exist.").arg(relative)));
         return;
     }
     if (instance->isRunning()) {
-        reply(ToolResult::error(QString("'%1' is running; deleting its files now could crash the game.").arg(instance->name())));
+        reply(ToolResult::error(ErrorCode::Busy, QString("'%1' is running; deleting its files now could crash the game.").arg(instance->name())));
         return;
     }
     QString trashed;
@@ -260,11 +260,11 @@ void filesDelete(const CallContext&, const QJsonObject& arguments, const ToolRep
         return;
     }
     if (!arguments.value("permanent").toBool(false)) {
-        reply(ToolResult::error("Moving it to the trash failed (or there is none).", "Pass permanent=true to delete it for good."));
+        reply(ToolResult::error(ErrorCode::Failed, "Moving it to the trash failed (or there is none).", "Pass permanent=true to delete it for good."));
         return;
     }
     if (!FS::deletePath(*path)) {
-        reply(ToolResult::error(QString("Deleting '%1' failed.").arg(relative)));
+        reply(ToolResult::error(ErrorCode::Failed, QString("Deleting '%1' failed.").arg(relative)));
         return;
     }
     reply(ToolResult::ok(QJsonObject{ { "instance", instance->id() }, { "path", relative }, { "trashed", false } }));
@@ -301,12 +301,12 @@ void screenshotsGet(const CallContext&, const QJsonObject& arguments, const Tool
     const auto name = arguments.value("file").toString();
     const auto dir = screenshotsDir(instance);
     if (name.contains('/') || name.contains('\\') || !dir.entryList(QDir::Files).contains(name)) {
-        reply(ToolResult::error(QString("No screenshot '%1'.").arg(name), "screenshots.list gives the names."));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No screenshot '%1'.").arg(name), "screenshots.list gives the names."));
         return;
     }
     const QImage image(dir.filePath(name));
     if (image.isNull()) {
-        reply(ToolResult::error(QString("'%1' is not a readable image.").arg(name)));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("'%1' is not a readable image.").arg(name)));
         return;
     }
     auto result = ToolResult::ok(QJsonObject{ { "file", name }, { "width", image.width() }, { "height", image.height() } });
@@ -323,11 +323,11 @@ void screenshotsDelete(const CallContext&, const QJsonObject& arguments, const T
     const auto name = arguments.value("file").toString();
     const auto dir = screenshotsDir(instance);
     if (name.contains('/') || name.contains('\\') || !dir.entryList(QDir::Files).contains(name)) {
-        reply(ToolResult::error(QString("No screenshot '%1'.").arg(name), "screenshots.list gives the names."));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No screenshot '%1'.").arg(name), "screenshots.list gives the names."));
         return;
     }
     if (!FS::trash(dir.filePath(name)) && !QFile::remove(dir.filePath(name))) {
-        reply(ToolResult::error(QString("Could not delete '%1'.").arg(name)));
+        reply(ToolResult::error(ErrorCode::Failed, QString("Could not delete '%1'.").arg(name)));
         return;
     }
     reply(ToolResult::ok(QJsonObject{ { "deleted", name } }));
@@ -347,7 +347,7 @@ void windowScreenshot(const CallContext&, const QJsonObject&, const ToolReply& r
         }
     }
     if (!window) {
-        reply(ToolResult::error("No launcher window is open."));
+        reply(ToolResult::error(ErrorCode::Unavailable, "No launcher window is open."));
         return;
     }
     const auto image = window->grab().toImage();

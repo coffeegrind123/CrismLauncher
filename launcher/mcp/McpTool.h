@@ -46,16 +46,55 @@ struct CallContext {
     // launcher window, or through the agent's client when it supports elicitation. Unset means nobody can answer, which
     // counts as a refusal.
     std::function<void(const QStringList& actions, const ConfirmAnswer& answer)> confirm;
+    // Always the launcher window, never the agent's chat: execute asks here, because an in-chat answer arrives as a retry
+    // of the whole call, which would run the script's earlier ops a second time. Unset when there is no window.
+    std::function<void(const QStringList& actions, const ConfirmAnswer& answer)> confirmInLauncher;
 };
 
 // What a call does, which decides whether the token's policy asks the human first
 enum class Effect { Read, Write, Destructive };
+
+// Stable error codes, part of the public contract: agents branch on them, so add new ones instead of renaming
+//   invalid_argument  the arguments are wrong; fix them and call again
+//   unknown_op        no such tool or op; see the "did you mean" list or search_ops
+//   not_found         an id, name, file or version that does not exist; list them again
+//   scope_missing     the token lacks a scope; only the user can grant it
+//   denied            the user declined, or nobody could be asked
+//   protected         the launcher never lets agents change this
+//   busy              in use (a running game, agents paused); retry once it is free
+//   conflict          the current state does not allow it (already exists, not running, required)
+//   unavailable       this build, platform or window cannot do it
+//   failed            the work itself failed (download, disk, platform API)
+//   cancelled         stopped by the agent, the user or a disconnect
+//   timeout           a time limit ran out; the work may still have happened
+//   internal          a bug in the launcher
+//   script_error      execute: the script threw, or an op it called failed and it did not catch that
+//   out_of_memory     execute: the script went over its memory limit
+enum class ErrorCode {
+    InvalidArgument,
+    UnknownOp,
+    NotFound,
+    ScopeMissing,
+    Denied,
+    Protected,
+    Busy,
+    Conflict,
+    Unavailable,
+    Failed,
+    Cancelled,
+    Timeout,
+    Internal,
+    ScriptError,
+    OutOfMemory,
+};
+QString errorCodeName(ErrorCode code);
 
 struct ToolResult {
     QJsonValue structured;     // structuredContent; must match the tool's outputSchema
     QString text;              // text content; when empty the structured value is rendered as JSON
     QJsonArray extraContent;   // images, resource links
     bool isError = false;
+    ErrorCode code = ErrorCode::Internal;  // meaningful only when isError
     // The call started this job; clients of the tasks extension get a task for it instead of this result
     QString jobId;
     // Set instead of a result when the user must answer first (MRTR InputRequiredResult)
@@ -65,7 +104,7 @@ struct ToolResult {
 
     static ToolResult ok(const QJsonValue& structured, const QString& text = {});
     // `hint` tells the model how to recover ("call instances to list valid ids")
-    static ToolResult error(const QString& message, const QString& hint = {});
+    static ToolResult error(ErrorCode code, const QString& message, const QString& hint = {});
 };
 
 using ToolReply = std::function<void(const ToolResult&)>;

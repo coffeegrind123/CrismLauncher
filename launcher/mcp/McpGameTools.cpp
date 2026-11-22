@@ -64,7 +64,7 @@ void launchTool(const CallContext&, const QJsonObject& arguments, const ToolRepl
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* instance = *found;
@@ -72,7 +72,7 @@ void launchTool(const CallContext&, const QJsonObject& arguments, const ToolRepl
 
     if (action == "stop") {
         if (!instance->isRunning()) {
-            reply(ToolResult::error(QString("'%1' is not running.").arg(instance->name())));
+            reply(ToolResult::error(ErrorCode::Conflict, QString("'%1' is not running.").arg(instance->name())));
             return;
         }
         const bool killed = APPLICATION->kill(instance);
@@ -81,7 +81,7 @@ void launchTool(const CallContext&, const QJsonObject& arguments, const ToolRepl
     }
 
     if (instance->isRunning()) {
-        reply(ToolResult::error(QString("'%1' is already running.").arg(instance->name()), "Use action=stop first to restart it."));
+        reply(ToolResult::error(ErrorCode::Conflict, QString("'%1' is already running.").arg(instance->name()), "Use action=stop first to restart it."));
         return;
     }
 
@@ -89,7 +89,7 @@ void launchTool(const CallContext&, const QJsonObject& arguments, const ToolRepl
     if (const auto key = arguments.value("account").toString(); !key.isEmpty()) {
         account = findAccount(key);
         if (!account) {
-            reply(ToolResult::error(QString("No account '%1'.").arg(key), accountHint()));
+            reply(ToolResult::error(ErrorCode::NotFound, QString("No account '%1'.").arg(key), accountHint()));
             return;
         }
     }
@@ -110,7 +110,7 @@ void launchTool(const CallContext&, const QJsonObject& arguments, const ToolRepl
     }
 
     if (!APPLICATION->launch(instance, mode, target, account, offlineName)) {
-        reply(ToolResult::error(QString("The launcher could not start '%1'.").arg(instance->name()), "See the launcher window for the reason."));
+        reply(ToolResult::error(ErrorCode::Failed, QString("The launcher could not start '%1'.").arg(instance->name()), "See the launcher window for the reason."));
         return;
     }
     reply(ToolResult::ok(QJsonObject{ { "instance", instance->id() }, { "launching", true } },
@@ -165,7 +165,7 @@ void logsTool(const CallContext&, const QJsonObject& arguments, const ToolReply&
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* instance = *found;
@@ -180,7 +180,7 @@ void logsTool(const CallContext&, const QJsonObject& arguments, const ToolReply&
     if (source == "game") {
         auto* launch = instance->getLaunchTask();
         if (!launch || !launch->getLogModel()) {
-            reply(ToolResult::error(QString("'%1' has not run since the launcher started.").arg(instance->name()),
+            reply(ToolResult::error(ErrorCode::Conflict, QString("'%1' has not run since the launcher started.").arg(instance->name()),
                                     "Use source=latest for the game's own latest.log, or source=crash."));
             return;
         }
@@ -198,7 +198,7 @@ void logsTool(const CallContext&, const QJsonObject& arguments, const ToolReply&
             const QDir crashes(QDir(instance->gameRoot()).filePath(CRASH_FOLDER));
             const auto newest = crashes.entryList({ "*.txt" }, QDir::Files, QDir::Time);
             if (newest.isEmpty()) {
-                reply(ToolResult::error(QString("'%1' has no crash reports.").arg(instance->name())));
+                reply(ToolResult::error(ErrorCode::NotFound, QString("'%1' has no crash reports.").arg(instance->name())));
                 return;
             }
             relative = QString("%1/%2").arg(CRASH_FOLDER, newest.first());
@@ -211,18 +211,18 @@ void logsTool(const CallContext&, const QJsonObject& arguments, const ToolReply&
             }
             // Only names this listing produced: nothing outside the logs and crash-report folders can be read
             if (!available.contains(relative)) {
-                reply(ToolResult::error(QString("No log file '%1'.").arg(relative), "Call logs source=file without `file` for the list."));
+                reply(ToolResult::error(ErrorCode::NotFound, QString("No log file '%1'.").arg(relative), "Call logs source=file without `file` for the list."));
                 return;
             }
         }
         const auto path = QDir(instance->gameRoot()).filePath(relative);
         if (!QFileInfo::exists(path)) {
-            reply(ToolResult::error(QString("%1 does not exist yet.").arg(relative), "The game writes it once it has run."));
+            reply(ToolResult::error(ErrorCode::NotFound, QString("%1 does not exist yet.").arg(relative), "The game writes it once it has run."));
             return;
         }
         auto read = readLogFile(path);
         if (!read) {
-            reply(ToolResult::error(read.error()));
+            reply(ToolResult::error(ErrorCode::NotFound, read.error()));
             return;
         }
         lines = *read;
@@ -232,7 +232,7 @@ void logsTool(const CallContext&, const QJsonObject& arguments, const ToolReply&
     const auto level = minimumLevel.isEmpty() ? -1 : static_cast<int>(MessageLevel::fromName(minimumLevel).value());
     const QRegularExpression pattern(grep, QRegularExpression::CaseInsensitiveOption);
     if (!grep.isEmpty() && !pattern.isValid()) {
-        reply(ToolResult::error(QString("Invalid grep pattern: %1").arg(pattern.errorString())));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, QString("Invalid grep pattern: %1").arg(pattern.errorString())));
         return;
     }
     QStringList kept;
@@ -264,7 +264,7 @@ void accountsSetDefault(const CallContext&, const QJsonObject& arguments, const 
 {
     const auto account = findAccount(arguments.value("account").toString());
     if (!account) {
-        reply(ToolResult::error(QString("No account '%1'.").arg(arguments.value("account").toString()), accountHint()));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No account '%1'.").arg(arguments.value("account").toString()), accountHint()));
         return;
     }
     APPLICATION->accounts()->setDefaultAccount(account);
@@ -275,7 +275,7 @@ void accountsSetForInstance(const CallContext&, const QJsonObject& arguments, co
 {
     auto found = findInstance(arguments.value("instance").toString());
     if (!found) {
-        reply(ToolResult::error(found.error()));
+        reply(ToolResult::error(ErrorCode::NotFound, found.error()));
         return;
     }
     auto* settings = (*found)->settings();
@@ -288,7 +288,7 @@ void accountsSetForInstance(const CallContext&, const QJsonObject& arguments, co
     }
     const auto account = findAccount(key);
     if (!account) {
-        reply(ToolResult::error(QString("No account '%1'.").arg(key), accountHint()));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No account '%1'.").arg(key), accountHint()));
         return;
     }
     // The launcher keys instance accounts by profile id (see LaunchController::decideAccount)
@@ -302,11 +302,11 @@ void accountsAddOffline(const CallContext&, const QJsonObject& arguments, const 
     static const QRegularExpression s_validName("^[A-Za-z0-9_]{3,16}$");
     const auto name = arguments.value("name").toString();
     if (!s_validName.match(name).hasMatch()) {
-        reply(ToolResult::error("Offline names are 3-16 characters: letters, digits and underscores."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, "Offline names are 3-16 characters: letters, digits and underscores."));
         return;
     }
     if (findAccount(name)) {
-        reply(ToolResult::error(QString("An account named '%1' already exists.").arg(name)));
+        reply(ToolResult::error(ErrorCode::Conflict, QString("An account named '%1' already exists.").arg(name)));
         return;
     }
     auto account = MinecraftAccount::createOffline(name);
@@ -322,11 +322,11 @@ void accountsRemove(const CallContext&, const QJsonObject& arguments, const Tool
     auto* accounts = APPLICATION->accounts();
     const auto account = findAccount(arguments.value("account").toString());
     if (!account) {
-        reply(ToolResult::error(QString("No account '%1'.").arg(arguments.value("account").toString()), accountHint()));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No account '%1'.").arg(arguments.value("account").toString()), accountHint()));
         return;
     }
     if (account->isActive()) {
-        reply(ToolResult::error(QString("'%1' is in use by a running game.").arg(account->profileName())));
+        reply(ToolResult::error(ErrorCode::Busy, QString("'%1' is in use by a running game.").arg(account->profileName())));
         return;
     }
     for (int i = 0; i < accounts->count(); ++i) {
@@ -342,7 +342,7 @@ void accountsRefresh(const CallContext&, const QJsonObject& arguments, const Too
 {
     const auto account = findAccount(arguments.value("account").toString());
     if (!account) {
-        reply(ToolResult::error(QString("No account '%1'.").arg(arguments.value("account").toString()), accountHint()));
+        reply(ToolResult::error(ErrorCode::NotFound, QString("No account '%1'.").arg(arguments.value("account").toString()), accountHint()));
         return;
     }
     APPLICATION->accounts()->requestRefresh(account->internalId());
@@ -383,7 +383,7 @@ void javaListInstalls(const CallContext&, const QJsonObject& arguments, const To
     }
     runTask(list->getLoadTask(arguments.value("rescan").toBool(false)), [respond, reply](bool ok, const QString& error) {
         if (!ok) {
-            reply(ToolResult::error(QString("Java detection failed: %1").arg(error)));
+            reply(ToolResult::error(ErrorCode::Failed, QString("Java detection failed: %1").arg(error)));
             return;
         }
         respond();

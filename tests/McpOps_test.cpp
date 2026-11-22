@@ -2,6 +2,7 @@
 #include <QTest>
 
 #include <mcp/McpOps.h>
+#include <mcp/McpReplay.h>
 #include <mcp/McpSchema.h>
 #include <mcp/McpTool.h>
 
@@ -80,7 +81,7 @@ class McpOpsTest : public QObject {
         fail.inputSchema = Schema::object({});
         fail.handler = [this](const CallContext&, const QJsonObject&, const ToolReply& reply) {
             m_ran.append("items.fail");
-            reply(ToolResult::error("nope"));
+            reply(ToolResult::error(ErrorCode::Failed, "nope"));
         };
         m_ops.add(fail);
 
@@ -105,6 +106,7 @@ class McpOpsTest : public QObject {
         m_ran.clear();
         m_asked.clear();
         m_questions.clear();
+        replayCache().clear();
     }
 
     void references_data()
@@ -119,6 +121,10 @@ class McpOpsTest : public QObject {
         QTest::newRow("plain string") << QJsonValue("hello $0") << QJsonValue("hello $0");
         QTest::newRow("nested") << QJsonValue(QJsonObject{ { "a", QJsonArray{ "$0.name" } } })
                                 << QJsonValue(QJsonObject{ { "a", QJsonArray{ "n" } } });
+        QTest::newRow("inline string") << QJsonValue("id=${0.name}!") << QJsonValue("id=n!");
+        QTest::newRow("inline number") << QJsonValue("x${0.list.1}y${0.list.0}") << QJsonValue("x2y1");
+        QTest::newRow("inline array") << QJsonValue("list ${0.list}") << QJsonValue("list [1,2]");
+        QTest::newRow("inline escaped") << QJsonValue("$${0.name}") << QJsonValue("${0.name}");
     }
 
     void references()
@@ -140,6 +146,8 @@ class McpOpsTest : public QObject {
         QTest::newRow("failed step") << "$0" << "failed";
         QTest::newRow("missing field") << "$2.nope" << "no field 'nope'";
         QTest::newRow("index out of range") << "$2.list.9" << "out of range";
+        QTest::newRow("inline future step") << "a ${1}" << "has not run yet";
+        QTest::newRow("inline missing field") << "a ${2.nope} b" << "no field 'nope'";
     }
 
     void badReferences()
@@ -147,7 +155,7 @@ class McpOpsTest : public QObject {
         QFETCH(QString, reference);
         QFETCH(QString, contains);
         const QJsonArray results{ QJsonObject{ { "ok", false } }, QJsonObject{}, QJsonObject{ { "ok", true }, { "result", QJsonObject{ { "list", QJsonArray{ 1 } } } } } };
-        const int current = reference == "$1" ? 1 : 3;
+        const int current = reference.contains("1") && !reference.contains("2") ? 1 : 3;
         const auto resolved = resolveReferences(QJsonValue(reference), results, current);
         QVERIFY(!resolved.has_value());
         QVERIFY2(resolved.error().contains(contains), qPrintable(resolved.error()));
@@ -169,6 +177,44 @@ class McpOpsTest : public QObject {
         QVERIFY(result.isError);
         QCOMPARE(m_ran, QStringList({ "items.make", "items.fail" }));
         QCOMPARE(result.structured.toObject()["stoppedAt"].toInt(), 1);
+        // The failed step carries the op's code, and so does the batch
+        const auto failed = result.structured.toObject()["results"].toArray()[1].toObject();
+        QCOMPARE(failed["code"].toString(), QString("failed"));
+        QCOMPARE(failed["error"].toString(), QString("nope"));
+        QCOMPARE(failed["index"].toInt(), 1);
+        QVERIFY(failed.contains("seconds"));
+        QCOMPARE(result.code, ErrorCode::Failed);
+        QVERIFY2(result.text.startsWith("failed: step 1 (items.fail) failed: nope"), qPrintable(result.text));
+    }
+
+    void batchOperationIdReplays()
+    {
+        const QJsonObject arguments{ { "ops", QJsonArray{ step("items.make") } }, { "operation_id", "b-1" }, { "label", "make" } };
+        auto result = run("batch", arguments);
+        QVERIFY(!result.isError);
+        QCOMPARE(result.structured.toObject()["label"].toString(), QString("make"));
+        result = run("batch", arguments);
+        QVERIFY(!result.isError);
+        QVERIFY(result.structured.toObject()["replayed"].toBool());
+        QCOMPARE(m_ran, QStringList{ "items.make" });
+
+        // Same id, other steps: refused, nothing runs
+        auto other = arguments;
+        other["ops"] = QJsonArray{ step("items.fail") };
+        result = run("batch", other);
+        QVERIFY(result.isError);
+        QCOMPARE(result.code, ErrorCode::Conflict);
+        QCOMPARE(m_ran, QStringList{ "items.make" });
+
+        // A batch refused before any step ran is not remembered: the retry runs
+        init();
+        const QJsonObject refused{ { "ops", QJsonArray{ step("files.write") } }, { "operation_id", "b-2" } };
+        result = run("batch", refused);
+        QVERIFY(result.isError);
+        QCOMPARE(result.code, ErrorCode::ScopeMissing);
+        result = run("batch", refused, Scope::Read | Scope::Files);
+        QVERIFY(!result.isError);
+        QCOMPARE(m_ran, QStringList{ "files.write" });
     }
 
     void batchContinuesOnErrorWhenAsked()
@@ -209,6 +255,7 @@ class McpOpsTest : public QObject {
         result = run("call", QJsonObject{ { "op", "items.eco" } });
         QVERIFY(result.isError);
         QVERIFY(result.text.contains("items.echo"));
+        QCOMPARE(result.structured.toObject()["code"].toString(), QString("unknown_op"));
 
         result = run("call", QJsonObject{ { "op", "files.write" } });
         QVERIFY(result.isError);

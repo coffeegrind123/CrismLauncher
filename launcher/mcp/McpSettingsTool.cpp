@@ -177,7 +177,7 @@ void settingsTool(const CallContext& context, const QJsonObject& arguments, cons
     const auto target = arguments.value("target").toString(LAUNCHER_TARGET);
     auto settings = targetSettings(target);
     if (!settings) {
-        reply(ToolResult::error(settings.error()));
+        reply(ToolResult::error(ErrorCode::Failed, settings.error()));
         return;
     }
     auto* object = *settings;
@@ -219,7 +219,7 @@ void settingsTool(const CallContext& context, const QJsonObject& arguments, cons
                     hints.append(QString("%1 -> %2").arg(key, close.join(" / ")));
                 }
             }
-            reply(ToolResult::error(QString("Unknown setting(s): %1").arg(unknown.join(", ")),
+            reply(ToolResult::error(ErrorCode::InvalidArgument, QString("Unknown setting(s): %1").arg(unknown.join(", ")),
                                     hints.isEmpty() ? QString("Use action=list with a query to find keys.") : "Did you mean: " + hints.join("; ")));
             return;
         }
@@ -229,13 +229,13 @@ void settingsTool(const CallContext& context, const QJsonObject& arguments, cons
 
     // action == "set"
     if (!context.token.scopes.testFlag(Scope::Settings)) {
-        reply(ToolResult::error("Changing settings needs the 'settings' scope, which this token does not have.",
+        reply(ToolResult::error(ErrorCode::ScopeMissing, "Changing settings needs the 'settings' scope, which this token does not have.",
                                 "The user can grant it in the launcher: Settings > AI agents (MCP) > edit the token."));
         return;
     }
     const auto values = arguments.value("values").toObject();
     if (values.isEmpty()) {
-        reply(ToolResult::error("action=set needs a non-empty `values` object (key: new value)."));
+        reply(ToolResult::error(ErrorCode::InvalidArgument, "action=set needs a non-empty `values` object (key: new value)."));
         return;
     }
 
@@ -245,20 +245,20 @@ void settingsTool(const CallContext& context, const QJsonObject& arguments, cons
         const auto setting = object->getSetting(it.key());
         if (!setting) {
             const auto close = closestMatches(it.key(), ids);
-            reply(ToolResult::error(QString("Unknown setting '%1'. Nothing was changed.").arg(it.key()),
+            reply(ToolResult::error(ErrorCode::InvalidArgument, QString("Unknown setting '%1'. Nothing was changed.").arg(it.key()),
                                     close.isEmpty() ? QString() : QString("Did you mean: %1?").arg(close.join(", "))));
             return;
         }
         switch (protectionFor(setting->id())) {
             case Protection::Secret:
             case Protection::Sensitive:
-                reply(ToolResult::error(QString("'%1' is protected: it can run programs, redirect downloads or traffic, move data, or "
+                reply(ToolResult::error(ErrorCode::Protected, QString("'%1' is protected: it can run programs, redirect downloads or traffic, move data, or "
                                                 "holds a secret. Nothing was changed.")
                                             .arg(setting->id()),
                                         "Ask the user to change it in the launcher's settings."));
                 return;
             case Protection::ReadOnly:
-                reply(ToolResult::error(QString("'%1' cannot be changed by agents. Nothing was changed.").arg(setting->id())));
+                reply(ToolResult::error(ErrorCode::Protected, QString("'%1' cannot be changed by agents. Nothing was changed.").arg(setting->id())));
                 return;
             case Protection::None:
                 break;
@@ -266,7 +266,7 @@ void settingsTool(const CallContext& context, const QJsonObject& arguments, cons
         const auto defaultValue = setting->defValue().isValid() ? setting->defValue() : setting->get();
         auto converted = fromJson(it.value(), defaultValue);
         if (!converted) {
-            reply(ToolResult::error(QString("'%1': %2. Nothing was changed.").arg(setting->id(), converted.error())));
+            reply(ToolResult::error(ErrorCode::InvalidArgument, QString("'%1': %2. Nothing was changed.").arg(setting->id(), converted.error())));
             return;
         }
         changes.emplace_back(setting, *converted);
