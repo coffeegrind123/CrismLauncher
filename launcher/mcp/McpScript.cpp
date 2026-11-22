@@ -252,7 +252,7 @@ class ScriptRun : public QObject {
     };
 
     // Called by QuickJS every few thousand instructions; non-zero stops the script with an uncatchable error
-    static int interrupt(JSRuntime*, void* opaque) { return static_cast<ScriptRun*>(opaque)->shouldStop() ? 1 : 0; }
+    static int interrupt(JSContext*, void* opaque) { return static_cast<ScriptRun*>(opaque)->shouldStop() ? 1 : 0; }
 
     bool shouldStop()
     {
