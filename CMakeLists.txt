@@ -545,6 +545,7 @@ add_subdirectory(libraries/rainbow) # Qt extension for colors
 add_subdirectory(libraries/LocalPeer) # fork of a library from Qt solutions
 add_subdirectory(libraries/murmur2) # Hash for usage with the CurseForge API
 add_subdirectory(libraries/qdcss) # css parser
+add_subdirectory(libraries/quickjs) # JavaScript engine for the MCP execute tool
 
 ############################### Built Artifacts ###############################
 
