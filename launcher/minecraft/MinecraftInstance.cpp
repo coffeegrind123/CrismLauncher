@@ -218,7 +218,6 @@ void MinecraftInstance::loadSpecificSettings()
         auto memorySetting = m_settings->registerSetting("OverrideMemory", false);
         m_settings->registerOverride(global_settings->getSetting("MinMemAlloc"), memorySetting);
         m_settings->registerOverride(global_settings->getSetting("MaxMemAlloc"), memorySetting);
-        m_settings->registerOverride(global_settings->getSetting("PermGen"), memorySetting);
         m_settings->registerOverride(global_settings->getSetting("LowMemWarning"), memorySetting);
 
         // Native library workarounds
@@ -515,7 +514,7 @@ static QString replaceTokensIn(const QString& text, const QMap<QString, QString>
     int lastCapturedEnd = 0;
     while (i.hasNext()) {
         QRegularExpressionMatch match = i.next();
-        result.append(text.mid(lastCapturedEnd, match.capturedStart()));
+        result.append(text.mid(lastCapturedEnd, match.capturedStart() - lastCapturedEnd));
         QString key = match.captured(1);
         auto iter = with.find(key);
         if (iter != with.end()) {
@@ -641,15 +640,7 @@ QStringList MinecraftInstance::javaArguments()
         args << QString("-Xmx%1m").arg(min);
     }
 
-    // No PermGen in newer java.
     JavaVersion javaVersion = getJavaVersion();
-    if (javaVersion.requiresPermGen()) {
-        auto permgen = settings()->get("PermGen").toInt();
-        if (permgen != 64) {
-            args << QString("-XX:PermSize=%1m").arg(permgen);
-        }
-    }
-
     if (javaVersion.isModular() && shouldApplyOnlineFixes())
         // allow reflective access to java.net - required by the skin fix
         args << "--add-opens" << "java.base/java.net=ALL-UNNAMED";
@@ -1098,6 +1089,12 @@ QMap<QString, QString> MinecraftInstance::makeProfileVarMapping(std::shared_ptr<
     result["assets_index_name"] = assets->id;
 
     result["library_directory"] = APPLICATION->metacache()->getBasePath("libraries");
+
+#ifdef Q_OS_WIN
+    result["classpath_separator"] = ";";
+#else
+    result["classpath_separator"] = ":";
+#endif
 
     return result;
 }

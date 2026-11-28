@@ -112,7 +112,6 @@
 #include "InstanceList.h"
 #include "mcp/McpService.h"
 #include "mcp/McpStdioRelay.h"
-#include "MTPixmapCache.h"
 
 #include <minecraft/auth/AccountList.h>
 #include "icons/IconList.h"
@@ -163,17 +162,12 @@
 #endif
 
 #if defined Q_OS_WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
 #include <windows.h>
 #endif
 
 #include "console/Console.h"
 
 static const QLatin1String g_liveCheckFile("live.check");
-
-PixmapCache* PixmapCache::s_instance = nullptr;
 
 static bool isANSIColorConsole;
 
@@ -763,7 +757,6 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         // Memory
         m_settings->registerSetting({ "MinMemAlloc", "MinMemoryAlloc" }, 512);
         m_settings->registerSetting({ "MaxMemAlloc", "MaxMemoryAlloc" }, SysInfo::defaultMaxJvmMem());
-        m_settings->registerSetting("PermGen", 128);
         m_settings->registerSetting("LowMemWarning", true);
 
         // Java Settings
@@ -958,7 +951,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
 
         // Init page provider
         {
-            m_globalSettingsProvider = std::make_unique<GenericPageProvider>(tr("Settings"));
+            m_globalSettingsProvider = std::make_unique<GenericPageProvider>("");
             m_globalSettingsProvider->addPage<LauncherPage>();
             m_globalSettingsProvider->addPage<LanguagePage>();
             m_globalSettingsProvider->addPage<AppearancePage>();
@@ -970,8 +963,6 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
             m_globalSettingsProvider->addPage<ExternalToolsPage>();
             m_globalSettingsProvider->addPage<ProxyPage>();
         }
-
-        PixmapCache::setInstance(new PixmapCache(this));
 
         qInfo() << "<> Settings loaded.";
     }
@@ -1725,6 +1716,7 @@ void Application::ShowGlobalSettings(class QWidget* parent, QString openPage)
     if (!m_globalSettingsProvider) {
         return;
     }
+    m_globalSettingsProvider->setDialogTitle(tr("Settings"));
     emit globalSettingsAboutToOpen();
     {
         SettingsObject::Lock lock(APPLICATION->settings());
@@ -1788,12 +1780,12 @@ InstanceWindow* Application::showInstanceWindow(MinecraftInstance* instance, con
     auto* window = instance->window();
 
     if (window != nullptr) {
-// If the window is minimized on macOS or Windows, activate and bring it up
+// If the window is minimized, activate and bring it up
 #ifdef Q_OS_MACOS
         if (window->isMinimized()) {
             window->setWindowState(window->windowState() & ~Qt::WindowMinimized);
         }
-#elif defined(Q_OS_WIN)
+#else
         if (window->isMinimized()) {
             window->showNormal();
         }
